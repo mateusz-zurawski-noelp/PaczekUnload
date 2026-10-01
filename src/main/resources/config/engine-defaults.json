@@ -1,0 +1,42 @@
+{
+  "window": {
+    "width": 1280,
+    "height": 720,
+    "title": "Vulkan Engine"
+  },
+  "graphics": {
+    "vsync": false,
+    "maxFramesInFlight": 2,
+    "validationLayers": true
+  },
+  "simulation": {
+    "updatesPerSecond": 60,
+    "maxFrameTime": 0.25
+  },
+  "camera": {
+    "position": [2.0, 2.0, 2.0],
+    "target": [0.0, 0.0, 0.0],
+    "up": [0.0, 0.0, 1.0],
+    "fovDegrees": 45.0,
+    "nearPlane": 0.1,
+    "farPlane": 100.0
+  },
+  "controls": {
+    "moveSpeed": 2.0,
+    "fastMultiplier": 4.0,
+    "mouseSensitivity": 0.15,
+    "invertY": false,
+    "zoomStepDegrees": 2.0
+  },
+  "shaders": {
+    "modelVertex": "shaders/model.vert",
+    "modelFragment": "shaders/model.frag",
+    "overlayVertex": "shaders/overlay.vert",
+    "overlayFragment": "shaders/overlay.frag"
+  },
+  "scene": {
+    "model": "models/chalet.obj",
+    "texture": "textures/chalet.jpg",
+    "rotationDegreesPerSecond": 90.0
+  }
+}
