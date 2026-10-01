@@ -20,11 +20,15 @@ public final class DescriptorSetLayout {
     private final VulkanContext ctx;
     private final long handle;
 
-    /** Zestaw "per klatka" (set = 0): macierze view/proj w uniform bufferze. */
+    /**
+     * Zestaw "per klatka" (set = 0): kamera (view/proj, pozycja) i oświetlenie.
+     * Widoczny w obu etapach: wierzchołki potrzebują macierzy, a fragmenty
+     * danych światła i pozycji kamery (do odblasków).
+     */
     public static DescriptorSetLayout perFrame(VulkanContext ctx) {
         return new DescriptorSetLayout(ctx,
                 new int[] {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER},
-                new int[] {VK_SHADER_STAGE_VERTEX_BIT});
+                new int[] {VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT});
     }
 
     /** Zestaw "per materiał" (set = 1): parametry materiału i dwie tekstury (patrz Material). */

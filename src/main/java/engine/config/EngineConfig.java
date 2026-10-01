@@ -18,6 +18,7 @@ public record EngineConfig(
         Simulation simulation,
         Camera camera,
         Controls controls,
+        Lighting lighting,
         Shaders shaders,
         Scene scene) {
 
@@ -27,6 +28,7 @@ public record EngineConfig(
         require(simulation != null, "brak sekcji simulation");
         require(camera != null, "brak sekcji camera");
         require(controls != null, "brak sekcji controls");
+        require(lighting != null, "brak sekcji lighting");
         require(shaders != null, "brak sekcji shaders");
         require(scene != null, "brak sekcji scene");
     }
@@ -109,6 +111,29 @@ public record EngineConfig(
         }
     }
 
+    /**
+     * Oświetlenie sceny (engine.scene.SceneLighting). Kolory liniowe, 0..1
+     * (większe wartości dozwolone - "jaśniej niż białe").
+     *
+     * @param sunDirection             kierunek, w którym świeci słońce (nie musi być znormalizowany)
+     * @param sunColor                 kolor słońca
+     * @param sunIntensity             mnożnik jasności słońca
+     * @param skyColor                 światło otoczenia padające z góry
+     * @param groundColor              światło otoczenia odbite od ziemi (z dołu)
+     * @param sunOrbitDegreesPerSecond obrót słońca wokół osi "góra" (0 = słońce stoi)
+     */
+    public record Lighting(float[] sunDirection, float[] sunColor, float sunIntensity,
+                           float[] skyColor, float[] groundColor, float sunOrbitDegreesPerSecond) {
+        public Lighting {
+            requireVec3(sunDirection, "lighting.sunDirection");
+            require(new Vector3f(sunDirection).lengthSquared() > 0, "lighting.sunDirection nie może być wektorem zerowym");
+            requireColor(sunColor, "lighting.sunColor");
+            requireColor(skyColor, "lighting.skyColor");
+            requireColor(groundColor, "lighting.groundColor");
+            require(sunIntensity >= 0, "lighting.sunIntensity nie może być ujemne");
+        }
+    }
+
     public record Shaders(String modelVertex, String modelFragment, String overlayVertex, String overlayFragment) {
         public Shaders {
             requirePath(modelVertex, "shaders.modelVertex");
@@ -133,6 +158,11 @@ public record EngineConfig(
 
     private static void requireVec3(float[] v, String key) {
         require(v != null && v.length == 3, key + " musi być tablicą 3 liczb, np. [0.0, 0.0, 1.0]");
+    }
+
+    private static void requireColor(float[] c, String key) {
+        require(c != null && c.length == 3 && c[0] >= 0 && c[1] >= 0 && c[2] >= 0,
+                key + " musi być tablicą 3 nieujemnych liczb (r, g, b), np. [1.0, 0.95, 0.9]");
     }
 
     private static void requirePath(String path, String key) {

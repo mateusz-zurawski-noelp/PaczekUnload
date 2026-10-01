@@ -7,12 +7,10 @@ import org.joml.Vector3fc;
 import org.lwjgl.PointerBuffer;
 import org.lwjgl.assimp.*;
 
-import java.io.File;
-import java.net.URISyntaxException;
+import java.nio.ByteBuffer;
 import java.nio.IntBuffer;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Objects;
 
 import static java.util.Objects.requireNonNull;
 import static org.lwjgl.assimp.Assimp.*;
@@ -29,12 +27,26 @@ public final class ModelLoader {
     private ModelLoader() {
     }
 
-    public static Model load(File file, int assimpFlags) {
+    /**
+     * Wczytuje model z zawartości pliku w pamięci. Dzięki temu nie ma
+     * znaczenia, czy plik leży na dysku, czy wewnątrz jara (tam nie ma
+     * ścieżki, którą Assimp mógłby otworzyć) - bajty dostarcza ResourceManager.
+     *
+     * Ograniczenie: formaty odwołujące się do innych plików (np. .obj z
+     * "mtllib", .gltf z osobnym .bin) nie znajdą ich z pamięci - dla takich
+     * trzeba by podpiąć Assimpowi własny system plików (AIFileIO).
+     *
+     * @param data     zawartość pliku (bufor poza stertą, np. z ResourceManager.readBytes)
+     * @param name     nazwa/ścieżka pliku - z rozszerzenia Assimp zgaduje format
+     */
+    public static Model load(ByteBuffer data, String name, int assimpFlags) {
+        int dot = name.lastIndexOf('.');
+        String formatHint = dot >= 0 ? name.substring(dot + 1) : "";
 
-        try (AIScene scene = aiImportFile(file.getAbsolutePath(), assimpFlags)) {
+        try (AIScene scene = aiImportFileFromMemory(data, assimpFlags, formatHint)) {
 
             if (scene == null || scene.mRootNode() == null) {
-                throw new RuntimeException("Nie udało się wczytać modelu " + file + ": " + aiGetErrorString());
+                throw new RuntimeException("Nie udało się wczytać modelu " + name + ": " + aiGetErrorString());
             }
 
             Model model = new Model();
@@ -66,6 +78,7 @@ public final class ModelLoader {
     private static void processMesh(AIMesh mesh, Model model) {
         processPositions(mesh, model.positions);
         processTexCoords(mesh, model.texCoords);
+        processNormals(mesh, model.normals);
         processIndices(mesh, model.indices);
     }
 
@@ -85,6 +98,17 @@ public final class ModelLoader {
         }
     }
 
+    private static void processNormals(AIMesh mesh, List<Vector3fc> normals) {
+        AIVector3D.Buffer source = mesh.mNormals();
+        if (source == null) {
+            throw new RuntimeException("Model nie ma normalnych - wczytaj go z flagą aiProcess_GenSmoothNormals albo aiProcess_GenNormals");
+        }
+        for (int i = 0; i < source.capacity(); i++) {
+            AIVector3D n = source.get(i);
+            normals.add(new Vector3f(n.x(), n.y(), n.z()));
+        }
+    }
+
     private static void processIndices(AIMesh mesh, List<Integer> indices) {
         AIFace.Buffer faces = mesh.mFaces();
         for (int i = 0; i < mesh.mNumFaces(); i++) {
@@ -96,20 +120,10 @@ public final class ModelLoader {
         }
     }
 
-    /** Znajduje plik zasobu na classpath jako File (Assimp czyta z dysku, nie ze strumienia). */
-    public static File resourceFile(String resourcePath) {
-        try {
-            var url = Objects.requireNonNull(ModelLoader.class.getClassLoader().getResource(resourcePath),
-                    "Nie znaleziono zasobu na classpath: " + resourcePath);
-            return new File(url.toURI());
-        } catch (URISyntaxException e) {
-            throw new RuntimeException(e);
-        }
-    }
-
     public static final class Model {
         public final List<Vector3fc> positions = new ArrayList<>();
         public final List<Vector2fc> texCoords = new ArrayList<>();
+        public final List<Vector3fc> normals = new ArrayList<>();
         public final List<Integer> indices = new ArrayList<>();
     }
 }

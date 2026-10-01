@@ -60,9 +60,7 @@ public final class UniformBuffers {
     }
 
     public void update(int index, UniformBufferObject ubo) {
-        ByteBuffer buffer = mapped.get(index);
-        ubo.view.get(0, buffer);
-        ubo.proj.get(16 * Float.BYTES, buffer);
+        ubo.write(mapped.get(index));
     }
 
     public void destroy() {

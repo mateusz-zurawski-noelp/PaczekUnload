@@ -27,6 +27,7 @@ classDiagram
         +simulation() Simulation
         +camera() Camera
         +controls() Controls
+        +lighting() Lighting
         +shaders() Shaders
         +scene() Scene
     }
@@ -65,6 +66,15 @@ classDiagram
         +boolean invertY
         +float zoomStepDegrees
     }
+    class LightingConfig["EngineConfig.Lighting"] {
+        <<record>>
+        +float[] sunDirection
+        +float[] sunColor
+        +float sunIntensity
+        +float[] skyColor
+        +float[] groundColor
+        +float sunOrbitDegreesPerSecond
+    }
     class ShadersConfig["EngineConfig.Shaders"] {
         <<record>>
         +String modelVertex
@@ -96,6 +106,7 @@ classDiagram
         -Renderable chalet
         -List~Renderable~ renderables
         -Camera camera
+        -SceneLighting lighting
         -FlyCameraController cameraController
         -SyncObjects sync
         -FpsCounter fpsCounter
@@ -204,17 +215,17 @@ classDiagram
     }
     class Mesh {
         +Mesh(ctx, pool, Vertex[], int[])
-        +loadFromFile(ctx, pool, path)$ Mesh
+        +loadFromFile(ctx, pool, resources, path)$ Mesh
         +indexCount() int
         +bind(VkCommandBuffer)
     }
     class ModelLoader {
-        +load(File, int)$ Model
-        +resourceFile(String)$ File
+        +load(ByteBuffer, name, flags)$ Model
     }
     class Model["ModelLoader.Model"] {
         +List~Vector3fc~ positions
         +List~Vector2fc~ texCoords
+        +List~Vector3fc~ normals
         +List~Integer~ indices
     }
     class Renderable {
@@ -261,6 +272,10 @@ classDiagram
         +build() Material
     }
     class Vertex {
+        +Vector3fc pos
+        +Vector3fc color
+        +Vector2fc texCoords
+        +Vector3fc normal
         +bindingDescription(stack)$
         +attributeDescriptions(stack)$
     }
@@ -276,6 +291,18 @@ classDiagram
         +SIZEOF$ int
         +Matrix4f view
         +Matrix4f proj
+        +Vector3f cameraPosition
+        +SceneLighting lighting
+        +write(ByteBuffer)
+    }
+    class SceneLighting {
+        +Vector3f sunDirection
+        +Vector3f sunColor
+        +float sunIntensity
+        +Vector3f skyColor
+        +Vector3f groundColor
+        +Vector3f worldUp
+        +rotateSun(float radians)
     }
 
     %% ---------- vulkan ----------
@@ -397,6 +424,7 @@ classDiagram
     EngineConfig *-- SimulationConfig
     EngineConfig *-- CameraConfig
     EngineConfig *-- ControlsConfig
+    EngineConfig *-- LightingConfig
     EngineConfig *-- ShadersConfig
     EngineConfig *-- SceneConfig
     EngineConfig ..> ConfigException : walidacja
@@ -434,6 +462,9 @@ classDiagram
     Engine --> DescriptorSets
     Engine --> CommandBuffers
     Engine ..> UniformBufferObject
+    Engine --> SceneLighting
+    Engine ..> LightingConfig : createLighting()
+    UniformBufferObject --> SceneLighting
     Engine ..> SevenSegmentDigits
     Engine ..> VulkanImages : findDepthFormat()
 
@@ -495,6 +526,7 @@ classDiagram
 
     %% geometria
     Mesh ..> ModelLoader
+    Mesh ..> ResourceManager : readBytes()
     ModelLoader ..> Model : load()
     Mesh ..> Vertex
     Mesh ..> VulkanBuffers

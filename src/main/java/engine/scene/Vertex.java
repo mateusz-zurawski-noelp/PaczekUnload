@@ -10,7 +10,9 @@ import static org.lwjgl.vulkan.VK10.*;
 
 /**
  * Jeden wierzchołek siatki: pozycja, kolor (tu zawsze biały - służy do
- * ewentualnego tintowania tekstury) i współrzędne UV tekstury.
+ * ewentualnego tintowania tekstury), współrzędne UV tekstury i normalna
+ * (wektor prostopadły do powierzchni - bez niej nie da się policzyć, pod
+ * jakim kątem pada światło, patrz model.frag).
  *
  * getBindingDescription/getAttributeDescriptions mówią Vulkanowi, jak
  * odczytać te dane z bufora wierzchołków - to programowy odpowiednik
@@ -19,19 +21,22 @@ import static org.lwjgl.vulkan.VK10.*;
  */
 public final class Vertex {
 
-    public static final int SIZEOF = (3 + 3 + 2) * Float.BYTES;
+    public static final int SIZEOF = (3 + 3 + 2 + 3) * Float.BYTES;
     private static final int OFFSETOF_POS = 0;
     private static final int OFFSETOF_COLOR = 3 * Float.BYTES;
     private static final int OFFSETOF_TEXCOORD = (3 + 3) * Float.BYTES;
+    private static final int OFFSETOF_NORMAL = (3 + 3 + 2) * Float.BYTES;
 
     public final Vector3fc pos;
     public final Vector3fc color;
     public final Vector2fc texCoords;
+    public final Vector3fc normal;
 
-    public Vertex(Vector3fc pos, Vector3fc color, Vector2fc texCoords) {
+    public Vertex(Vector3fc pos, Vector3fc color, Vector2fc texCoords, Vector3fc normal) {
         this.pos = pos;
         this.color = color;
         this.texCoords = texCoords;
+        this.normal = normal;
     }
 
     public static VkVertexInputBindingDescription.Buffer bindingDescription(MemoryStack stack) {
@@ -47,7 +52,7 @@ public final class Vertex {
     public static VkVertexInputAttributeDescription.Buffer attributeDescriptions(MemoryStack stack) {
 
         VkVertexInputAttributeDescription.Buffer attributeDescriptions =
-                VkVertexInputAttributeDescription.calloc(3, stack);
+                VkVertexInputAttributeDescription.calloc(4, stack);
 
         VkVertexInputAttributeDescription position = attributeDescriptions.get(0);
         position.binding(0);
@@ -66,6 +71,12 @@ public final class Vertex {
         texCoord.location(2);
         texCoord.format(VK_FORMAT_R32G32_SFLOAT);
         texCoord.offset(OFFSETOF_TEXCOORD);
+
+        VkVertexInputAttributeDescription normal = attributeDescriptions.get(3);
+        normal.binding(0);
+        normal.location(3);
+        normal.format(VK_FORMAT_R32G32B32_SFLOAT);
+        normal.offset(OFFSETOF_NORMAL);
 
         return attributeDescriptions.rewind();
     }

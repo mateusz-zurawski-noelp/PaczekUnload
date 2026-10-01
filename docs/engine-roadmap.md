@@ -76,7 +76,8 @@ commitowi albo branchowi. Ułatwia to też wracanie do konkretnego etapu nauki.
     licznikiem 0 czeka na `collectGarbage()` zamiast ginąć od razu, bo GPU
     może go jeszcze używać w klatce "w locie".
 - **Następny krok:** `MeshManager` na tym samym `ResourceCache` (dziś
-  `Mesh.loadFromFile` wciąż czyta plik przy każdym wywołaniu).
+  `Mesh.loadFromFile` czyta plik przez `ResourceManager.readBytes`, ale bez
+  cache'u - przy każdym wywołaniu od nowa).
 - **Opcjonalnie:** hot-reload shaderów - `ShaderCompiler` już kompiluje GLSL
   w locie, więc dopięcie obserwatora plików i przebudowy `GraphicsPipeline`
   na zmianę pliku `.frag`/`.vert` to tania i satysfakcjonująca funkcja przy
@@ -144,6 +145,13 @@ To już jest główny ciężar tego repo, więc naturalnie najdalej zaszedł.
      `specularColor`/`shininess`/`reflectivity`, które `Material` już ma, ale
      które dziś nic nie robią. To naturalna kontynuacja wcześniejszej
      rozmowy o oświetleniu.
+     **Zrobione:** normalne w `Vertex` (location = 3), generowane przez
+     Assimp (`aiProcess_GenSmoothNormals`); `SceneLighting` (słońce
+     kierunkowe + ambient półsferyczny niebo/ziemia) w UBO "per klatka"
+     razem z pozycją kamery; w `model.frag` Lambert (diffuse) + Blinn-Phong
+     (specular z `specularColor`/`shininess`) + `reflectivity` jako odbicie
+     gradientu niebo/ziemia (zamiast prawdziwej cubemapy); sekcja `lighting`
+     w konfiguracji (kierunek, kolory, natężenie, opcjonalny obieg słońca).
   2. **Wiele świateł** - tablica świateł w buforze zamiast jednego.
   3. **Culling i sortowanie** - przy większej liczbie `Renderable` filtrowanie
      po frustumie kamery i sortowanie rysowania po materiale/pipeline, żeby
@@ -214,8 +222,9 @@ materiałami, ale bez światła i bez wejścia), naturalne następne kroki to:
    zrobione (`InputManager`, `FlyCameraController`), patrz punkt 3.
 2. ~~**Stały krok czasowy**~~ (rozdz. 3/Game Loop) - zrobione
    (`FixedTimestep` + interpolacja w `Renderable`), patrz punkt 3.
-3. **Oświetlenie** (rozdz. 5/Rendering Engine) - naturalna kontynuacja tego,
-   co już jest w `Material`, i najbardziej "widowiskowy" krok na tym etapie.
+3. ~~**Oświetlenie**~~ (rozdz. 5/Rendering Engine) - zrobione (jedno słońce
+   + ambient półsferyczny, Blinn-Phong), patrz punkt 5. Kolejne naturalne
+   kroki tam: wiele świateł, potem cienie.
 4. Dopiero potem reszta listy, w miarę potrzeb. (`ResourceManager` z
    `TextureManager` jest już zrobiony - patrz punkt 2.)
 

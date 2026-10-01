@@ -1,5 +1,6 @@
 package engine.scene;
 
+import engine.resource.ResourceManager;
 import engine.vulkan.CommandPool;
 import engine.vulkan.VulkanBuffers;
 import engine.vulkan.VulkanContext;
@@ -7,14 +8,14 @@ import org.joml.Vector3f;
 import org.joml.Vector3fc;
 import org.lwjgl.PointerBuffer;
 import org.lwjgl.system.MemoryStack;
+import org.lwjgl.system.MemoryUtil;
 import org.lwjgl.vulkan.VkCommandBuffer;
 
-import java.io.File;
 import java.nio.ByteBuffer;
 import java.nio.LongBuffer;
 
-import static org.lwjgl.assimp.Assimp.aiProcess_DropNormals;
 import static org.lwjgl.assimp.Assimp.aiProcess_FlipUVs;
+import static org.lwjgl.assimp.Assimp.aiProcess_GenSmoothNormals;
 import static org.lwjgl.system.MemoryStack.stackPush;
 import static org.lwjgl.vulkan.VK10.*;
 
@@ -57,17 +58,28 @@ public final class Mesh {
         }
     }
 
-    /** Wczytuje model z pliku i zamienia go na siatkę gotową do rysowania (biały tint na całej powierzchni). */
-    public static Mesh loadFromFile(VulkanContext ctx, CommandPool commandPool, String modelResourcePath) {
+    /**
+     * Wczytuje model z pliku (classpath albo dysk - przez ResourceManager) i
+     * zamienia go na siatkę gotową do rysowania (biały tint na całej powierzchni).
+     */
+    public static Mesh loadFromFile(VulkanContext ctx, CommandPool commandPool, ResourceManager resources, String modelPath) {
 
-        File modelFile = ModelLoader.resourceFile(modelResourcePath);
-        ModelLoader.Model model = ModelLoader.load(modelFile, aiProcess_FlipUVs | aiProcess_DropNormals);
+        ByteBuffer fileData = resources.readBytes(modelPath);
+        // GenSmoothNormals: jeśli plik nie ma normalnych (chalet.obj nie ma), Assimp
+        // wylicza je, uśredniając normalne ścian stykających się w wierzchołku -
+        // dzięki temu oświetlenie jest gładkie, a nie "kanciaste" na każdym trójkącie.
+        ModelLoader.Model model;
+        try {
+            model = ModelLoader.load(fileData, modelPath, aiProcess_FlipUVs | aiProcess_GenSmoothNormals);
+        } finally {
+            MemoryUtil.memFree(fileData);
+        }
 
         Vector3fc white = new Vector3f(1.0f, 1.0f, 1.0f);
 
         Vertex[] vertices = new Vertex[model.positions.size()];
         for (int i = 0; i < vertices.length; i++) {
-            vertices[i] = new Vertex(model.positions.get(i), white, model.texCoords.get(i));
+            vertices[i] = new Vertex(model.positions.get(i), white, model.texCoords.get(i), model.normals.get(i));
         }
 
         int[] indices = new int[model.indices.size()];
@@ -116,6 +128,7 @@ public final class Mesh {
             buffer.putFloat(vertex.pos.x()).putFloat(vertex.pos.y()).putFloat(vertex.pos.z());
             buffer.putFloat(vertex.color.x()).putFloat(vertex.color.y()).putFloat(vertex.color.z());
             buffer.putFloat(vertex.texCoords.x()).putFloat(vertex.texCoords.y());
+            buffer.putFloat(vertex.normal.x()).putFloat(vertex.normal.y()).putFloat(vertex.normal.z());
         }
     }
 

@@ -9,9 +9,11 @@ import engine.scene.FpsCounter;
 import engine.scene.Material;
 import engine.scene.Mesh;
 import engine.scene.Renderable;
+import engine.scene.SceneLighting;
 import engine.scene.SevenSegmentDigits;
 import engine.scene.UniformBufferObject;
 import engine.vulkan.*;
+import org.joml.Vector3f;
 import org.lwjgl.system.MemoryStack;
 import org.lwjgl.vulkan.VkPresentInfoKHR;
 import org.lwjgl.vulkan.VkSubmitInfo;
@@ -55,6 +57,7 @@ public final class Engine {
     private Renderable chalet;
     private final List<Renderable> renderables = new ArrayList<>();
     private Camera camera;
+    private SceneLighting lighting;
     private FlyCameraController cameraController;
     private SyncObjects sync;
     private FpsCounter fpsCounter;
@@ -95,10 +98,15 @@ public final class Engine {
         resources = new ResourceManager(ctx, commandPool);
 
         chaletTexture = resources.textures().acquire(config.scene().texture());
-        chaletMesh = Mesh.loadFromFile(ctx, commandPool, config.scene().model());
+        chaletMesh = Mesh.loadFromFile(ctx, commandPool, resources, config.scene().model());
+        // Drewno i dachówki: słaby, szeroki odblask (niski połysk) i brak odbić -
+        // domyślny biały odblask z połyskiem 32 wyglądałby jak plastik.
         chaletMaterial = Material.builder(ctx, materialLayout, resources.textures().white())
                 .name("chalet")
                 .baseColorTexture(chaletTexture)
+                .specularColor(0.15f, 0.15f, 0.15f)
+                .shininess(16.0f)
+                .reflectivity(0.0f)
                 .build();
 
         chalet = new Renderable("chalet").add(chaletMesh, chaletMaterial);
@@ -110,12 +118,25 @@ public final class Engine {
         camera.setPerspective(cameraConfig.fovDegrees(), cameraConfig.nearPlane(), cameraConfig.farPlane());
         cameraController = new FlyCameraController(camera, input, config.controls());
 
+        lighting = createLighting(config.lighting(), cameraConfig.upVec());
+
         fpsCounter = new FpsCounter();
         overlayMesh = new OverlayMesh(ctx, SevenSegmentDigits.VERTEX_COUNT);
 
         createSwapChainDependentObjects();
 
         sync = new SyncObjects(ctx, swapChain.imageCount(), config.graphics().maxFramesInFlight());
+    }
+
+    private static SceneLighting createLighting(EngineConfig.Lighting lightingConfig, Vector3f worldUp) {
+        SceneLighting result = new SceneLighting();
+        result.sunDirection.set(lightingConfig.sunDirection()).normalize();
+        result.sunColor.set(lightingConfig.sunColor());
+        result.sunIntensity = lightingConfig.sunIntensity();
+        result.skyColor.set(lightingConfig.skyColor());
+        result.groundColor.set(lightingConfig.groundColor());
+        result.worldUp.set(worldUp).normalize();
+        return result;
     }
 
     private void createSwapChainDependentObjects() {
@@ -283,15 +304,23 @@ public final class Engine {
         // wynik jest taki sam przy każdym FPS, a płynność daje interpolacja w renderze.
         double degreesPerSecond = config.scene().rotationDegreesPerSecond();
         //chalet.rotation.rotateZ((float) Math.toRadians(degreesPerSecond * step));
+
+        // Opcjonalny obieg słońca wokół osi "góra" - widać, jak zmienia się
+        // cieniowanie ścian i odblaski. Domyślnie 0 (słońce stoi).
+        float sunOrbit = config.lighting().sunOrbitDegreesPerSecond();
+        if (sunOrbit != 0.0f) {
+            lighting.rotateSun((float) Math.toRadians(sunOrbit * step));
+        }
     }
 
     private void updateUniformBuffer(int imageIndex) {
 
-        UniformBufferObject ubo = new UniformBufferObject();
+        UniformBufferObject ubo = new UniformBufferObject(lighting);
 
         float aspectRatio = (float) swapChain.extent().width() / (float) swapChain.extent().height();
         ubo.view.set(camera.viewMatrix());
         ubo.proj.set(camera.projectionMatrix(aspectRatio));
+        ubo.cameraPosition.set(camera.position());
 
         uniformBuffers.update(imageIndex, ubo);
     }

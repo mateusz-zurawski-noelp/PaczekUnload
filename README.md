@@ -42,7 +42,8 @@ konfiguracji (patrz niżej).
 ### Konfiguracja
 
 Ustawienia silnika (okno, vsync, liczba klatek "w locie", warstwy
-walidacyjne, kamera, ścieżki shaderów/modelu/tekstury) są w
+walidacyjne, krok symulacji, kamera, sterowanie, oświetlenie, ścieżki
+shaderów/modelu/tekstury) są w
 `src/main/resources/config/engine-defaults.json`. Żeby je zmienić bez
 przebudowy, połóż w katalogu roboczym plik `engine.json` z samymi kluczami,
 które chcesz nadpisać, np.:
@@ -96,7 +97,8 @@ src/main/java/engine/
     ConfigException.java     błąd w pliku konfiguracji
   core/
     Window.java              okno GLFW
-    Engine.java              spina wszystko: init, pętla główna (input -> update -> draw), resize, cleanup
+    Engine.java              spina wszystko: init, pętla główna (input -> frameUpdate -> fixedUpdate -> draw), resize, cleanup
+    FixedTimestep.java       stały krok symulacji z akumulatorem + alpha do interpolacji
   input/
     InputManager.java        callbacki GLFW -> stan klawiatury/myszy do odpytywania (isKeyDown, mouseDelta...)
   vulkan/
@@ -124,10 +126,11 @@ src/main/java/engine/
     ResourceCache.java           wspólny cache "ścieżka -> zasób" z licznikiem referencji
     ResourcePaths.java           normalizacja ścieżek (klucze cache'u)
   scene/
-    Vertex.java                 layout jednego wierzchołka (model 3D)
-    UniformBufferObject.java    dane wysyłane do shadera co klatkę
+    Vertex.java                 layout jednego wierzchołka (pozycja, kolor, UV, normalna)
+    UniformBufferObject.java    dane wysyłane do shaderów co klatkę (kamera + oświetlenie, układ std140)
+    SceneLighting.java           słońce (światło kierunkowe) + ambient półsferyczny niebo/ziemia
     Mesh.java                    geometria + jej bufory GPU
-    ModelLoader.java             wczytywanie modeli (Assimp) - .obj/.fbx/.gltf/...
+    ModelLoader.java             wczytywanie modeli z pamięci (Assimp) - .obj/.fbx/.glb/...; generuje normalne
     Camera.java                  kamera swobodna (pozycja + kierunek, obrót/ruch/zoom) + projekcja
     FlyCameraController.java     sterowanie kamerą z klawiatury i myszy (WASD + PPM)
     OverlayVertex.java           layout wierzchołka nakładki 2D (pozycja NDC + kolor)
@@ -135,7 +138,7 @@ src/main/java/engine/
     SevenSegmentDigits.java       generuje geometrię licznika FPS (wyświetlacz 7-segmentowy)
 
 src/main/resources/
-  shaders/model.vert, model.frag       shadery GLSL modelu 3D
+  shaders/model.vert, model.frag       shadery GLSL modelu 3D (oświetlenie: Lambert + Blinn-Phong + ambient półsferyczny)
   shaders/overlay.vert, overlay.frag   shadery GLSL nakładki 2D (licznik FPS)
   textures/chalet.jpg                   tekstura domku
   config/engine-defaults.json           domyślna konfiguracja silnika
@@ -160,8 +163,9 @@ eksperymentów:
 
 - Podmień `chalet.obj`/`chalet.jpg` na własny model (dowolny format, który
   ogarnia Assimp) — wystarczy zmienić `scene.model`/`scene.texture` w
-  `engine.json` (tekstura może leżeć na dysku, model na razie musi być na
-  classpath, bo `Mesh.loadFromFile` nie przechodzi jeszcze przez `ResourceManager`).
+  `engine.json` (oba mogą leżeć na classpath albo na dysku). Formaty
+  odwołujące się do innych plików (`.obj` z `mtllib`, `.gltf` z osobnym
+  `.bin`) nie zadziałają, bo Assimp dostaje sam plik z pamięci.
 - Dorzuć mipmapping do `Texture` (następny rozdział oryginalnego tutoriala).
 - Dodaj multisampling (MSAA) w `RenderPass`/`GraphicsPipeline`.
 - Wyciągnij `UniformBufferObject` per-obiekt i narysuj więcej niż jeden model.
