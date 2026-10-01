@@ -1,6 +1,10 @@
 package engine.core;
 
+import engine.config.EngineConfig;
+import engine.input.InputManager;
+import engine.resource.ResourceManager;
 import engine.scene.Camera;
+import engine.scene.FlyCameraController;
 import engine.scene.FpsCounter;
 import engine.scene.Material;
 import engine.scene.Mesh;
@@ -8,7 +12,6 @@ import engine.scene.Renderable;
 import engine.scene.SevenSegmentDigits;
 import engine.scene.UniformBufferObject;
 import engine.vulkan.*;
-import org.joml.Vector3f;
 import org.lwjgl.system.MemoryStack;
 import org.lwjgl.vulkan.VkPresentInfoKHR;
 import org.lwjgl.vulkan.VkSubmitInfo;
@@ -17,6 +20,7 @@ import java.nio.IntBuffer;
 import java.util.ArrayList;
 import java.util.List;
 
+import static org.lwjgl.glfw.GLFW.GLFW_KEY_ESCAPE;
 import static org.lwjgl.glfw.GLFW.glfwGetTime;
 import static org.lwjgl.system.MemoryStack.stackPush;
 import static org.lwjgl.vulkan.KHRSwapchain.*;
@@ -34,29 +38,24 @@ import static org.lwjgl.vulkan.VK10.*;
  */
 public final class Engine {
 
-    private static final int DEFAULT_WIDTH = 1280;
-    private static final int DEFAULT_HEIGHT = 720;
-
-    private static final String MODEL_PATH = "models/chalet.obj";
-    private static final String TEXTURE_PATH = "textures/chalet.jpg";
-    private static final String VERTEX_SHADER_PATH = "shaders/model.vert";
-    private static final String FRAGMENT_SHADER_PATH = "shaders/model.frag";
-    private static final String OVERLAY_VERTEX_SHADER_PATH = "shaders/overlay.vert";
-    private static final String OVERLAY_FRAGMENT_SHADER_PATH = "shaders/overlay.frag";
+    private final EngineConfig config;
+    private final FixedTimestep timestep;
 
     // Zasoby żyjące przez cały czas trwania aplikacji
     private Window window;
+    private InputManager input;
     private VulkanContext ctx;
     private CommandPool commandPool;
     private DescriptorSetLayout frameLayout;
     private DescriptorSetLayout materialLayout;
-    private Texture whiteTexture;
+    private ResourceManager resources;
     private Texture chaletTexture;
     private Mesh chaletMesh;
     private Material chaletMaterial;
     private Renderable chalet;
     private final List<Renderable> renderables = new ArrayList<>();
     private Camera camera;
+    private FlyCameraController cameraController;
     private SyncObjects sync;
     private FpsCounter fpsCounter;
     private OverlayMesh overlayMesh;
@@ -72,6 +71,11 @@ public final class Engine {
     private DescriptorSets descriptorSets;
     private CommandBuffers commandBuffers;
 
+    public Engine(EngineConfig config) {
+        this.config = config;
+        this.timestep = new FixedTimestep(config.simulation().updatesPerSecond(), config.simulation().maxFrameTime());
+    }
+
     public void run() {
         init();
         loop();
@@ -79,42 +83,49 @@ public final class Engine {
     }
 
     private void init() {
-        window = new Window(DEFAULT_WIDTH, DEFAULT_HEIGHT, "Vulkan Engine");
-        ctx = new VulkanContext(window);
+        EngineConfig.Window windowConfig = config.window();
+        window = new Window(windowConfig.width(), windowConfig.height(), windowConfig.title());
+        input = new InputManager(window);
+        ctx = new VulkanContext(window, config.graphics().validationLayers());
         commandPool = new CommandPool(ctx);
 
         frameLayout = DescriptorSetLayout.perFrame(ctx);
         materialLayout = DescriptorSetLayout.perMaterial(ctx);
 
-        whiteTexture = Texture.solidColor(ctx, commandPool, 255, 255, 255, 255);
-        chaletTexture = new Texture(ctx, commandPool, TEXTURE_PATH);
-        chaletMesh = Mesh.loadFromFile(ctx, commandPool, MODEL_PATH);
-        chaletMaterial = Material.builder(ctx, materialLayout, whiteTexture)
+        resources = new ResourceManager(ctx, commandPool);
+
+        chaletTexture = resources.textures().acquire(config.scene().texture());
+        chaletMesh = Mesh.loadFromFile(ctx, commandPool, config.scene().model());
+        chaletMaterial = Material.builder(ctx, materialLayout, resources.textures().white())
                 .name("chalet")
                 .baseColorTexture(chaletTexture)
                 .build();
 
         chalet = new Renderable("chalet").add(chaletMesh, chaletMaterial);
+        chalet.resetInterpolation(); // pozycja startowa = "poprzednia", bez przelotu z (0,0,0) w 1. klatce
         renderables.add(chalet);
 
-        camera = new Camera(new Vector3f(2.0f, 2.0f, 2.0f), new Vector3f(0.0f, 0.0f, 0.0f), new Vector3f(0.0f, 0.0f, 1.0f));
+        EngineConfig.Camera cameraConfig = config.camera();
+        camera = new Camera(cameraConfig.positionVec(), cameraConfig.targetVec(), cameraConfig.upVec());
+        camera.setPerspective(cameraConfig.fovDegrees(), cameraConfig.nearPlane(), cameraConfig.farPlane());
+        cameraController = new FlyCameraController(camera, input, config.controls());
 
         fpsCounter = new FpsCounter();
         overlayMesh = new OverlayMesh(ctx, SevenSegmentDigits.VERTEX_COUNT);
 
         createSwapChainDependentObjects();
 
-        sync = new SyncObjects(ctx, swapChain.imageCount());
+        sync = new SyncObjects(ctx, swapChain.imageCount(), config.graphics().maxFramesInFlight());
     }
 
     private void createSwapChainDependentObjects() {
-        swapChain = new SwapChain(ctx, window);
+        swapChain = new SwapChain(ctx, window, config.graphics().vsync());
         renderPass = new RenderPass(ctx, swapChain.imageFormat(), VulkanImages.findDepthFormat(ctx));
         depthResources = new DepthResources(ctx, commandPool, swapChain.extent());
         pipeline = new GraphicsPipeline(ctx, renderPass, frameLayout, materialLayout, swapChain.extent(),
-                VERTEX_SHADER_PATH, FRAGMENT_SHADER_PATH);
+                config.shaders().modelVertex(), config.shaders().modelFragment());
         overlayPipeline = new OverlayPipeline(ctx, renderPass, swapChain.extent(),
-                OVERLAY_VERTEX_SHADER_PATH, OVERLAY_FRAGMENT_SHADER_PATH);
+                config.shaders().overlayVertex(), config.shaders().overlayFragment());
         framebuffers = new Framebuffers(ctx, renderPass, swapChain.imageViews(), depthResources.imageView(), swapChain.extent());
         uniformBuffers = new UniformBuffers(ctx, swapChain.imageCount());
         descriptorSets = new DescriptorSets(ctx, frameLayout, swapChain.imageCount(), uniformBuffers);
@@ -150,15 +161,34 @@ public final class Engine {
         createSwapChainDependentObjects();
     }
 
+    /**
+     * Pętla główna ze stałym krokiem symulacji (patrz FixedTimestep):
+     *
+     *   1. wejście      - input.beginFrame() + pollEvents()
+     *   2. frameUpdate  - raz na klatkę, zmienny deltaTime: rzeczy, które mają
+     *                     reagować natychmiast (kamera sterowana myszą, Esc)
+     *   3. fixedUpdate  - 0..N razy, zawsze ten sam krok: symulacja świata
+     *                     (ruch obiektów, a w przyszłości fizyka i animacja)
+     *   4. drawFrame    - rysuje stan interpolowany o timestep.alpha()
+     */
     private void loop() {
         while (!window.shouldClose()) {
+            input.beginFrame();
             Window.pollEvents();
-            drawFrame();
+
+            float frameTime = (float) timestep.beginFrame(glfwGetTime());
+            frameUpdate(frameTime);
+
+            while (timestep.consumeStep()) {
+                fixedUpdate(timestep.stepSeconds());
+            }
+
+            drawFrame(timestep.alpha());
         }
         vkDeviceWaitIdle(ctx.device());
     }
 
-    private void drawFrame() {
+    private void drawFrame(float alpha) {
 
         Frame frame = sync.currentFrame();
         sync.waitForFrame(frame);
@@ -183,10 +213,9 @@ public final class Engine {
             sync.markImageInUse(imageIndex, frame);
 
             fpsCounter.onFrameRendered();
-            updateScene();
             updateUniformBuffer(imageIndex);
             overlayMesh.update(SevenSegmentDigits.buildFps(fpsCounter.fps(), swapChain.extent().width(), swapChain.extent().height()));
-            commandBuffers.record(imageIndex, renderables);
+            commandBuffers.record(imageIndex, renderables, alpha);
 
             VkSubmitInfo submitInfo = VkSubmitInfo.calloc(stack);
             submitInfo.sType(VK_STRUCTURE_TYPE_SUBMIT_INFO);
@@ -223,10 +252,37 @@ public final class Engine {
         sync.advance();
     }
 
-    private void updateScene() {
-        // Obracaj model o 90 stopni na sekundę wokół osi Z - najprostszy
-        // dowód, że cały potok faktycznie się aktualizuje co klatkę.
-        chalet.rotation.identity().rotateZ((float) (glfwGetTime() * Math.toRadians(90)));
+    /**
+     * Aktualizacja raz na klatkę, ze zmiennym krokiem. Tu trafia to, co ma
+     * reagować bez opóźnienia na wejście - kamera nie jest interpolowana,
+     * więc musi być aktualna w każdej narysowanej klatce.
+     *
+     * Zbocza wejścia (wasKeyPressed) obsługujemy TYLKO tutaj: w jednej klatce
+     * może wykonać się 0 albo kilka kroków fixedUpdate, więc tam takie
+     * zdarzenie zostałoby zgubione albo obsłużone kilka razy. fixedUpdate może
+     * czytać stan ciągły (isKeyDown).
+     */
+    private void frameUpdate(float frameTime) {
+        if (input.wasKeyPressed(GLFW_KEY_ESCAPE)) {
+            window.requestClose();
+        }
+        cameraController.update(frameTime);
+    }
+
+    /** Jeden krok symulacji świata - zawsze o tej samej długości (stepSeconds). */
+    private void fixedUpdate(float step) {
+        for (Renderable renderable : renderables) {
+            renderable.savePreviousTransform();
+        }
+        updateScene(step);
+    }
+
+    private void updateScene(float step) {
+        // Obracaj model wokół osi Z (domyślnie 90 stopni na sekundę) - najprostszy
+        // dowód, że symulacja faktycznie "tyka". Obrót przyrostowy o stały krok:
+        // wynik jest taki sam przy każdym FPS, a płynność daje interpolacja w renderze.
+        double degreesPerSecond = config.scene().rotationDegreesPerSecond();
+        //chalet.rotation.rotateZ((float) Math.toRadians(degreesPerSecond * step));
     }
 
     private void updateUniformBuffer(int imageIndex) {
@@ -247,8 +303,8 @@ public final class Engine {
         overlayMesh.destroy();
         chaletMaterial.destroy();
         chaletMesh.destroy();
-        chaletTexture.destroy();
-        whiteTexture.destroy();
+        resources.textures().release(chaletTexture);
+        resources.shutdown();
         materialLayout.destroy();
         frameLayout.destroy();
         commandPool.destroy();

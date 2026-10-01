@@ -28,7 +28,8 @@ import static org.lwjgl.vulkan.VK10.*;
  * synchronizować z klatkami "w locie". Zmiana wyglądu = nowy Material.
  *
  * Tekstury są tylko referencjami - materiał ich nie zwalnia, bo mogą być
- * współdzielone przez kilka materiałów (odpowiada za nie właściciel, np. Engine).
+ * współdzielone przez kilka materiałów (ich życiem zarządza TextureManager;
+ * kto zrobił acquire, ten robi release).
  *
  * Layout uniform bufferu w GLSL (std140), set = 1, binding = 0:
  *

@@ -35,7 +35,8 @@ public final class SwapChain {
     private final VkExtent2D extent;
     private final List<Long> imageViews;
 
-    public SwapChain(VulkanContext ctx, Window window) {
+    /** @param vsync true = zawsze FIFO (czeka na odświeżenie ekranu), false = MAILBOX, jeśli dostępny */
+    public SwapChain(VulkanContext ctx, Window window, boolean vsync) {
         this.ctx = ctx;
 
         try (MemoryStack stack = stackPush()) {
@@ -43,7 +44,7 @@ public final class SwapChain {
             SwapChainSupportDetails support = ctx.querySwapChainSupport(stack);
 
             VkSurfaceFormatKHR surfaceFormat = chooseSurfaceFormat(support.formats);
-            int presentMode = choosePresentMode(support.presentModes);
+            int presentMode = choosePresentMode(support.presentModes, vsync);
             VkExtent2D chosenExtent = chooseExtent(stack, window, support.capabilities);
 
             IntBuffer imageCount = stack.ints(support.capabilities.minImageCount() + 1);
@@ -128,7 +129,10 @@ public final class SwapChain {
                 .orElse(available.get(0));
     }
 
-    private static int choosePresentMode(IntBuffer available) {
+    private static int choosePresentMode(IntBuffer available, boolean vsync) {
+        if (vsync) {
+            return VK_PRESENT_MODE_FIFO_KHR;
+        }
         for (int i = 0; i < available.capacity(); i++) {
             // MAILBOX = potrójne buforowanie: GPU nigdy nie czeka, a mimo to nie ma tearingu.
             if (available.get(i) == VK_PRESENT_MODE_MAILBOX_KHR) {

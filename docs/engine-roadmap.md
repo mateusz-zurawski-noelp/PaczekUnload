@@ -45,6 +45,13 @@ commitowi albo branchowi. Ułatwia to też wracanie do konkretnego etapu nauki.
   `MAX_FRAMES_IN_FLIGHT` są dziś zaszyte w `Engine`/`SyncObjects`. Wydzielenie
   pliku konfiguracyjnego (properties/JSON) to mały, ale realny krok w stronę
   "silnika", a nie "programu".
+  - **Zrobione:** pakiet `engine.config` - `EngineConfig` (rekordy z
+    walidacją: okno, grafika, kamera, shadery, scena) i `ConfigLoader`
+    (Gson). Domyślne wartości w `config/engine-defaults.json` na classpath,
+    plik użytkownika (`./engine.json` albo ścieżka z pierwszego argumentu)
+    nadpisuje tylko podane klucze; nieznane klucze są zgłaszane jako
+    ostrzeżenie (literówki). Konfigurowalne są m.in. rozmiar okna, vsync,
+    `maxFramesInFlight`, warstwy walidacyjne, kamera i ścieżki zasobów.
 - **Pamięć.** W C++ Gregory poświęca temu osobny rozdział (własne alokatory).
   W Javie GC zdejmuje większość tego problemu - `MemoryStack` już pokrywa
   rolę alokatora "per klatka" po stronie Vulkana. Nie ma potrzeby budować
@@ -59,6 +66,17 @@ commitowi albo branchowi. Ułatwia to też wracanie do konkretnego etapu nauki.
 - **Krok:** `ResourceManager` cache'ujący po ścieżce (mapa `String -> Texture`/
   `String -> Mesh`), zwracający ten sam obiekt przy powtórnym żądaniu, ze
   zliczaniem referencji do bezpiecznego `destroy()`.
+- **Zrobione (tekstury):** pakiet `engine.resource`:
+  - `ResourceManager` - centralny podsystem: warstwa plików (`readBytes`
+    szuka najpierw na classpath, potem na dysku), właściciel menedżerów
+    typów zasobów, `collectGarbage()` i `shutdown()` z raportem wycieków.
+  - `TextureManager` - jedyne miejsce wczytujące tekstury z plików
+    (`acquire(path)` / `release(texture)`), plus wbudowana `white()`.
+  - `ResourceCache<T>` - wspólny cache ze zliczaniem referencji; zasób z
+    licznikiem 0 czeka na `collectGarbage()` zamiast ginąć od razu, bo GPU
+    może go jeszcze używać w klatce "w locie".
+- **Następny krok:** `MeshManager` na tym samym `ResourceCache` (dziś
+  `Mesh.loadFromFile` wciąż czyta plik przy każdym wywołaniu).
 - **Opcjonalnie:** hot-reload shaderów - `ShaderCompiler` już kompiluje GLSL
   w locie, więc dopięcie obserwatora plików i przebudowy `GraphicsPipeline`
   na zmianę pliku `.frag`/`.vert` to tania i satysfakcjonująca funkcja przy
@@ -79,6 +97,32 @@ commitowi albo branchowi. Ułatwia to też wracanie do konkretnego etapu nauki.
   framebuffera. `InputManager` opakowujący callbacki GLFW (klawiatura, mysz)
   z odpytywalnym stanem (`isKeyDown`, `mouseDelta`) pozwoli sterować
   `Camera` z klawiatury - dobry, namacalny sprawdzian tego podsystemu.
+- **Zrobione (wejście i kamera):**
+  - `engine.input.InputManager` - callbacki GLFW (klawiatura, przyciski
+    myszy, kursor, kółko) zamienione na stan do odpytywania: `isKeyDown`,
+    zbocza `wasKeyPressed`/`wasKeyReleased` (prawdziwe przez jedną klatkę),
+    `mouseDelta`, `scrollDelta`, przechwytywanie kursora z surowym ruchem myszy.
+  - `Camera` - kamera swobodna (pozycja + kierunek, `rotate`/`move`/`zoom`,
+    blokada pitch przy pionie) zamiast stałego `lookAt`.
+  - `FlyCameraController` - sterowanie jak w edytorach: PPM + mysz,
+    WASD, Q/E, Shift, kółko = zoom, R = reset; parametry w sekcji
+    `controls` konfiguracji.
+- **Zrobione (stały krok czasowy):**
+  - `engine.core.FixedTimestep` - akumulator czasu, stały krok
+    (`simulation.updatesPerSecond`, domyślnie 60), limit długości klatki
+    (`simulation.maxFrameTime`, 0,25 s) przeciw "spirali śmierci" i
+    `alpha()` - ułamek kroku do interpolacji.
+  - Pętla: `input.beginFrame()` -> `pollEvents()` -> `frameUpdate(frameTime)`
+    (raz na klatkę: kamera, Esc) -> `fixedUpdate(step)` 0..N razy (symulacja
+    świata) -> `drawFrame(alpha)`.
+  - `Renderable` pamięta transformację sprzed kroku
+    (`savePreviousTransform`), a renderer rysuje stan pośredni
+    (`interpolatedModelMatrix`: lerp pozycji/skali, slerp obrotu).
+  - Zasada: zbocza wejścia (`wasKeyPressed`) tylko we `frameUpdate` - w
+    `fixedUpdate` mogłyby zostać zgubione (0 kroków w klatce) albo
+    obsłużone wielokrotnie (kilka kroków).
+- **Następny krok tutaj:** podsystemy (`Subsystem` z punktu 1) z własnymi
+  `fixedUpdate`/`frameUpdate`, gdy dojdą fizyka i animacja.
 
 ## 4. Matematyka 3D (rozdz. "3D Math for Games")
 
@@ -166,13 +210,14 @@ wdrażać ich 1:1 w tej samej kolejności - część (audio, AI, skrypty) nie ma
 jeszcze czego obsługiwać. Biorąc pod uwagę, gdzie kod już jest (renderer z
 materiałami, ale bez światła i bez wejścia), naturalne następne kroki to:
 
-1. **Wejście + sterowanie kamerą** (rozdz. 3/Human Interface Devices) - mały,
-   namacalny krok, od razu widoczny efekt.
-2. **Jawny `deltaTime` i rozdzielenie update/render** (rozdz. 3/Game Loop) -
-   fundament pod wszystko, co przyjdzie później (fizyka, animacja).
+1. ~~**Wejście + sterowanie kamerą**~~ (rozdz. 3/Human Interface Devices) -
+   zrobione (`InputManager`, `FlyCameraController`), patrz punkt 3.
+2. ~~**Stały krok czasowy**~~ (rozdz. 3/Game Loop) - zrobione
+   (`FixedTimestep` + interpolacja w `Renderable`), patrz punkt 3.
 3. **Oświetlenie** (rozdz. 5/Rendering Engine) - naturalna kontynuacja tego,
    co już jest w `Material`, i najbardziej "widowiskowy" krok na tym etapie.
-4. Dopiero potem `ResourceManager` i reszta listy, w miarę potrzeb.
+4. Dopiero potem reszta listy, w miarę potrzeb. (`ResourceManager` z
+   `TextureManager` jest już zrobiony - patrz punkt 2.)
 
 Daj znać, od którego punktu zaczynamy - każdy nadaje się na osobną sesję
 nauki z książką obok klawiatury.

@@ -14,7 +14,6 @@ import static org.lwjgl.glfw.GLFWVulkan.glfwCreateWindowSurface;
 import static org.lwjgl.glfw.GLFWVulkan.glfwGetRequiredInstanceExtensions;
 import static org.lwjgl.system.MemoryStack.stackPush;
 import static org.lwjgl.system.MemoryUtil.NULL;
-import static org.lwjgl.system.Configuration.DEBUG;
 import static org.lwjgl.vulkan.EXTDebugUtils.*;
 import static org.lwjgl.vulkan.KHRSurface.*;
 import static org.lwjgl.vulkan.KHRSwapchain.VK_KHR_SWAPCHAIN_EXTENSION_NAME;
@@ -39,11 +38,10 @@ public final class VulkanContext {
     // zainstalowany (np. `apt install vulkan-validationlayers` na Ubuntu).
     // Zamiast twardo wymagać go, po prostu ostrzegamy i jedziemy dalej bez
     // walidacji, żeby silnik działał "out of the box" wszędzie tam, gdzie
-    // jest jakikolwiek sterownik Vulkana.
-    private static final boolean ENABLE_VALIDATION_LAYERS = resolveValidationLayersEnabled();
-
-    private static boolean resolveValidationLayersEnabled() {
-        if (!DEBUG.get(true)) {
+    // jest jakikolwiek sterownik Vulkana. Wyłączyć je można w konfiguracji
+    // silnika (graphics.validationLayers).
+    private static boolean resolveValidationLayersEnabled(boolean requested) {
+        if (!requested) {
             return false;
         }
         if (validationLayersSupported()) {
@@ -65,10 +63,12 @@ public final class VulkanContext {
     private final VkQueue presentQueue;
     private final int graphicsQueueFamily;
     private final int presentQueueFamily;
+    private final boolean validationLayersEnabled;
 
-    public VulkanContext(Window window) {
-        instance = createInstance();
-        debugMessenger = ENABLE_VALIDATION_LAYERS ? setupDebugMessenger(instance) : VK_NULL_HANDLE;
+    public VulkanContext(Window window, boolean validationLayersRequested) {
+        validationLayersEnabled = resolveValidationLayersEnabled(validationLayersRequested);
+        instance = createInstance(validationLayersEnabled);
+        debugMessenger = validationLayersEnabled ? setupDebugMessenger(instance) : VK_NULL_HANDLE;
         surface = createSurface(instance, window);
         physicalDevice = pickPhysicalDevice(instance, surface);
 
@@ -76,7 +76,7 @@ public final class VulkanContext {
         graphicsQueueFamily = indices.graphicsFamily;
         presentQueueFamily = indices.presentFamily;
 
-        device = createLogicalDevice(physicalDevice, indices);
+        device = createLogicalDevice(physicalDevice, indices, validationLayersEnabled);
 
         try (MemoryStack stack = stackPush()) {
             PointerBuffer pQueue = stack.pointers(VK_NULL_HANDLE);
@@ -121,7 +121,7 @@ public final class VulkanContext {
 
     // ===== instance & debug messenger ===== //
 
-    private static VkInstance createInstance() {
+    private static VkInstance createInstance(boolean validationLayersEnabled) {
 
         try (MemoryStack stack = stackPush()) {
 
@@ -136,9 +136,9 @@ public final class VulkanContext {
             VkInstanceCreateInfo createInfo = VkInstanceCreateInfo.calloc(stack);
             createInfo.sType(VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO);
             createInfo.pApplicationInfo(appInfo);
-            createInfo.ppEnabledExtensionNames(requiredExtensions(stack));
+            createInfo.ppEnabledExtensionNames(requiredExtensions(stack, validationLayersEnabled));
 
-            if (ENABLE_VALIDATION_LAYERS) {
+            if (validationLayersEnabled) {
                 createInfo.ppEnabledLayerNames(asPointerBuffer(stack, VALIDATION_LAYERS));
 
                 VkDebugUtilsMessengerCreateInfoEXT debugCreateInfo = VkDebugUtilsMessengerCreateInfoEXT.calloc(stack);
@@ -155,14 +155,14 @@ public final class VulkanContext {
         }
     }
 
-    private static PointerBuffer requiredExtensions(MemoryStack stack) {
+    private static PointerBuffer requiredExtensions(MemoryStack stack, boolean validationLayersEnabled) {
 
         PointerBuffer glfwExtensions = glfwGetRequiredInstanceExtensions();
         if (glfwExtensions == null) {
             throw new RuntimeException("GLFW zgłasza brak wsparcia dla Vulkana na tym systemie");
         }
 
-        if (!ENABLE_VALIDATION_LAYERS) {
+        if (!validationLayersEnabled) {
             return glfwExtensions;
         }
 
@@ -360,7 +360,8 @@ public final class VulkanContext {
 
     // ===== logical device ===== //
 
-    private static VkDevice createLogicalDevice(VkPhysicalDevice physicalDevice, QueueFamilyIndices indices) {
+    private static VkDevice createLogicalDevice(VkPhysicalDevice physicalDevice, QueueFamilyIndices indices,
+                                                boolean validationLayersEnabled) {
         try (MemoryStack stack = stackPush()) {
 
             int[] uniqueQueueFamilies = indices.unique();
@@ -382,7 +383,7 @@ public final class VulkanContext {
             createInfo.pEnabledFeatures(deviceFeatures);
             createInfo.ppEnabledExtensionNames(asPointerBuffer(stack, DEVICE_EXTENSIONS));
 
-            if (ENABLE_VALIDATION_LAYERS) {
+            if (validationLayersEnabled) {
                 createInfo.ppEnabledLayerNames(asPointerBuffer(stack, VALIDATION_LAYERS));
             }
 
@@ -406,7 +407,7 @@ public final class VulkanContext {
     public void destroy() {
         vkDestroyDevice(device, null);
 
-        if (ENABLE_VALIDATION_LAYERS && vkGetInstanceProcAddr(instance, "vkDestroyDebugUtilsMessengerEXT") != NULL) {
+        if (validationLayersEnabled && vkGetInstanceProcAddr(instance, "vkDestroyDebugUtilsMessengerEXT") != NULL) {
             vkDestroyDebugUtilsMessengerEXT(instance, debugMessenger, null);
         }
 

@@ -5,8 +5,6 @@ import org.lwjgl.system.MemoryStack;
 import org.lwjgl.system.MemoryUtil;
 import org.lwjgl.vulkan.VkSamplerCreateInfo;
 
-import java.io.IOException;
-import java.io.InputStream;
 import java.nio.ByteBuffer;
 import java.nio.IntBuffer;
 import java.nio.LongBuffer;
@@ -37,8 +35,16 @@ public final class Texture {
     private record Pixels(ByteBuffer data, int width, int height, Runnable release) {
     }
 
-    public Texture(VulkanContext ctx, CommandPool commandPool, String resourcePath) {
-        this(ctx, commandPool, decode(resourcePath));
+    /**
+     * Tekstura z zakodowanego pliku obrazu (PNG, JPG, TGA... - wszystko, co
+     * rozumie stb_image). Samo czytanie pliku z dysku i cache'owanie to
+     * zadanie TextureManagera - tu trafiają już gotowe bajty.
+     *
+     * @param encoded  zawartość pliku; nie jest zwalniana (należy do wywołującego)
+     * @param name     nazwa do komunikatów o błędach (zwykle ścieżka)
+     */
+    public static Texture fromEncodedImage(VulkanContext ctx, CommandPool commandPool, ByteBuffer encoded, String name) {
+        return new Texture(ctx, commandPool, decode(encoded, name));
     }
 
     /** Jednokolorowa tekstura 1x1 - neutralny zamiennik, gdy materiał nie ma danej tekstury (biała = brak wpływu). */
@@ -48,19 +54,16 @@ public final class Texture {
         return new Texture(ctx, commandPool, new Pixels(data, 1, 1, () -> MemoryUtil.memFree(data)));
     }
 
-    private static Pixels decode(String resourcePath) {
+    private static Pixels decode(ByteBuffer encoded, String name) {
         try (MemoryStack stack = stackPush()) {
-            ByteBuffer fileContents = readResourceToDirectBuffer(resourcePath);
-
             IntBuffer pWidth = stack.mallocInt(1);
             IntBuffer pHeight = stack.mallocInt(1);
             IntBuffer pChannels = stack.mallocInt(1);
 
-            ByteBuffer pixels = stbi_load_from_memory(fileContents, pWidth, pHeight, pChannels, STBI_rgb_alpha);
-            MemoryUtil.memFree(fileContents);
+            ByteBuffer pixels = stbi_load_from_memory(encoded, pWidth, pHeight, pChannels, STBI_rgb_alpha);
 
             if (pixels == null) {
-                throw new RuntimeException("Nie udało się wczytać tekstury " + resourcePath + ": " + stbi_failure_reason());
+                throw new RuntimeException("Nie udało się zdekodować tekstury " + name + ": " + stbi_failure_reason());
             }
 
             return new Pixels(pixels, pWidth.get(0), pHeight.get(0), () -> stbi_image_free(pixels));
@@ -141,20 +144,6 @@ public final class Texture {
             }
 
             return pSampler.get(0);
-        }
-    }
-
-    private static ByteBuffer readResourceToDirectBuffer(String resourcePath) {
-        try (InputStream in = Texture.class.getClassLoader().getResourceAsStream(resourcePath)) {
-            if (in == null) {
-                throw new RuntimeException("Nie znaleziono tekstury na classpath: " + resourcePath);
-            }
-            byte[] bytes = in.readAllBytes();
-            ByteBuffer buffer = MemoryUtil.memAlloc(bytes.length);
-            buffer.put(bytes).flip();
-            return buffer;
-        } catch (IOException e) {
-            throw new RuntimeException("Nie udało się wczytać tekstury " + resourcePath, e);
         }
     }
 

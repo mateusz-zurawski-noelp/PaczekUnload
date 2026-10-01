@@ -1,5 +1,6 @@
 package engine.core;
 
+import static org.lwjgl.glfw.Callbacks.glfwFreeCallbacks;
 import static org.lwjgl.glfw.GLFW.*;
 import static org.lwjgl.system.MemoryUtil.NULL;
 
@@ -38,6 +39,11 @@ public final class Window {
         return glfwWindowShouldClose(handle);
     }
 
+    /** Prośba o zamknięcie - pętla główna skończy się po bieżącej klatce. */
+    public void requestClose() {
+        glfwSetWindowShouldClose(handle, true);
+    }
+
     public static void pollEvents() {
         glfwPollEvents();
     }
@@ -60,6 +66,8 @@ public final class Window {
     }
 
     public void destroy() {
+        // Callbacki (resize, wejście...) to natywne obiekty LWJGL - trzeba je zwolnić ręcznie.
+        glfwFreeCallbacks(handle);
         glfwDestroyWindow(handle);
         glfwTerminate();
     }

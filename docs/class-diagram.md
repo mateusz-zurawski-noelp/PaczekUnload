@@ -2,7 +2,9 @@
 
 Diagram w formacie Mermaid (renderuje go GitHub, IntelliJ z pluginem Mermaid, VS Code itd.).
 Materiał (`Material`) i obiekt sceny (`Renderable`) są opisane w `Renderable.java` / `Material.java`; `Renderable` nie jest właścicielem meshy ani materiałów.
-Strzałki `-->` to posiadanie/użycie (kompozycja w `Engine`), `..>` to zależność (parametr konstruktora / wywołanie statyczne).
+Tekstury z plików należą do `TextureManager` (pakiet `engine.resource`) - kod gry pobiera je przez `acquire(path)` i oddaje przez `release(texture)`.
+Strzałki `-->` to posiadanie/użycie (kompozycja w `Engine`), `*--` to kompozycja wewnątrz klasy, `..>` to zależność (parametr konstruktora / wywołanie statyczne).
+Pominięte zostały zależności od `VulkanContext`, które ma prawie każda klasa z pakietu `vulkan` (poza kilkoma pokazowymi), oraz metody `destroy()` - ma je każdy obiekt trzymający zasoby Vulkana.
 
 ```mermaid
 classDiagram
@@ -12,19 +14,89 @@ classDiagram
         +main(String[])$
     }
 
+    %% ---------- config ----------
+    class ConfigLoader {
+        +DEFAULT_USER_CONFIG$ String
+        +fromArgs(String[])$ EngineConfig
+        +load(Path)$ EngineConfig
+    }
+    class EngineConfig {
+        <<record>>
+        +window() Window
+        +graphics() Graphics
+        +simulation() Simulation
+        +camera() Camera
+        +controls() Controls
+        +shaders() Shaders
+        +scene() Scene
+    }
+    class ConfigException
+    class WindowConfig["EngineConfig.Window"] {
+        <<record>>
+        +int width
+        +int height
+        +String title
+    }
+    class GraphicsConfig["EngineConfig.Graphics"] {
+        <<record>>
+        +boolean vsync
+        +int maxFramesInFlight
+        +boolean validationLayers
+    }
+    class SimulationConfig["EngineConfig.Simulation"] {
+        <<record>>
+        +double updatesPerSecond
+        +double maxFrameTime
+    }
+    class CameraConfig["EngineConfig.Camera"] {
+        <<record>>
+        +float[] position
+        +float[] target
+        +float[] up
+        +float fovDegrees
+        +float nearPlane
+        +float farPlane
+    }
+    class ControlsConfig["EngineConfig.Controls"] {
+        <<record>>
+        +float moveSpeed
+        +float fastMultiplier
+        +float mouseSensitivity
+        +boolean invertY
+        +float zoomStepDegrees
+    }
+    class ShadersConfig["EngineConfig.Shaders"] {
+        <<record>>
+        +String modelVertex
+        +String modelFragment
+        +String overlayVertex
+        +String overlayFragment
+    }
+    class SceneConfig["EngineConfig.Scene"] {
+        <<record>>
+        +String model
+        +String texture
+        +float rotationDegreesPerSecond
+    }
+
     %% ---------- core ----------
     class Engine {
+        -EngineConfig config
+        -FixedTimestep timestep
         -Window window
+        -InputManager input
         -VulkanContext ctx
         -CommandPool commandPool
         -DescriptorSetLayout frameLayout
         -DescriptorSetLayout materialLayout
-        -Texture whiteTexture
+        -ResourceManager resources
         -Texture chaletTexture
         -Mesh chaletMesh
         -Material chaletMaterial
+        -Renderable chalet
         -List~Renderable~ renderables
         -Camera camera
+        -FlyCameraController cameraController
         -SyncObjects sync
         -FpsCounter fpsCounter
         -OverlayMesh overlayMesh
@@ -39,51 +111,124 @@ classDiagram
         -CommandBuffers commandBuffers
         +run()
         -init()
-        -loop()
-        -drawFrame()
-        -updateScene()
-        -updateUniformBuffer(int)
+        -createSwapChainDependentObjects()
+        -cleanupSwapChainDependentObjects()
         -recreateSwapChain()
+        -loop()
+        -frameUpdate(float frameTime)
+        -fixedUpdate(float step)
+        -updateScene(float step)
+        -drawFrame(float alpha)
+        -updateUniformBuffer(int)
         -cleanup()
     }
+    class FixedTimestep {
+        +FixedTimestep(updatesPerSecond, maxFrameTime)
+        +beginFrame(double now) double
+        +consumeStep() boolean
+        +stepSeconds() float
+        +alpha() float
+        +totalSteps() long
+    }
+    %% ---------- input ----------
+    class InputManager {
+        +beginFrame()
+        +isKeyDown(int) boolean
+        +wasKeyPressed(int) boolean
+        +wasKeyReleased(int) boolean
+        +isMouseButtonDown(int) boolean
+        +wasMouseButtonPressed(int) boolean
+        +wasMouseButtonReleased(int) boolean
+        +cursorPosition() Vector2dc
+        +mouseDelta() Vector2dc
+        +scrollDelta() Vector2dc
+        +setCursorCaptured(boolean)
+        +isCursorCaptured() boolean
+    }
+
     class Window {
         +handle() long
         +shouldClose() boolean
+        +requestClose()
         +framebufferSize() int[]
         +consumeFramebufferResized() boolean
         +pollEvents()$
         +waitEvents()$
-        +destroy()
+    }
+
+    %% ---------- resource ----------
+    class ResourceManager {
+        +textures() TextureManager
+        +readBytes(String) ByteBuffer
+        +collectGarbage()
+        +shutdown()
+    }
+    class TextureManager {
+        +acquire(String) Texture
+        +release(Texture)
+        +white() Texture
+        +refCount(String) int
+        +loadedCount() int
+    }
+    class ResourceCache~T~ {
+        ~acquire(String) T
+        ~release(T)
+        ~destroyUnused() int
+        ~destroyAll() List~String~
+        ~refCount(String) int
+        ~size() int
+    }
+    class ResourcePaths {
+        ~normalize(String)$ String
     }
 
     %% ---------- scene ----------
     class Camera {
+        +setPerspective(fov, near, far)
+        +lookAt(Vector3fc, Vector3fc)
+        +rotate(yaw, pitch)
+        +move(forward, right, up)
+        +zoom(float)
+        +position() Vector3fc
+        +forward() Vector3fc
+        +fovDegrees() float
         +viewMatrix() Matrix4f
         +projectionMatrix(float) Matrix4f
+    }
+    class FlyCameraController {
+        +update(float deltaTime)
     }
     class FpsCounter {
         +onFrameRendered()
         +fps() int
     }
     class Mesh {
+        +Mesh(ctx, pool, Vertex[], int[])
         +loadFromFile(ctx, pool, path)$ Mesh
         +indexCount() int
         +bind(VkCommandBuffer)
-        +destroy()
     }
     class ModelLoader {
         +load(File, int)$ Model
         +resourceFile(String)$ File
     }
+    class Model["ModelLoader.Model"] {
+        +List~Vector3fc~ positions
+        +List~Vector2fc~ texCoords
+        +List~Integer~ indices
+    }
     class Renderable {
-        +String name
         +Vector3f position
         +Quaternionf rotation
         +Vector3f scale
         +boolean visible
+        +name() String
         +add(Mesh, Material) Renderable
         +parts() List~Part~
         +modelMatrix(Matrix4f) Matrix4f
+        +savePreviousTransform()
+        +resetInterpolation()
+        +interpolatedModelMatrix(float alpha, Matrix4f) Matrix4f
     }
     class Part {
         <<record>>
@@ -91,6 +236,7 @@ classDiagram
         +Material material
     }
     class Material {
+        +name() String
         +baseColor() Vector4fc
         +specularColor() Vector3fc
         +shininess() float
@@ -101,7 +247,6 @@ classDiagram
         +secondTexture() Texture
         +descriptorSet() long
         +builder(ctx, layout, fallbackTexture)$ Builder
-        +destroy()
     }
     class MaterialBuilder["Material.Builder"] {
         +name(String)
@@ -124,9 +269,11 @@ classDiagram
         +attributeDescriptions(stack)$
     }
     class SevenSegmentDigits {
+        +VERTEX_COUNT$ int
         +buildFps(fps, w, h)$ List~OverlayVertex~
     }
     class UniformBufferObject {
+        +SIZEOF$ int
         +Matrix4f view
         +Matrix4f proj
     }
@@ -139,7 +286,8 @@ classDiagram
         +surface() long
         +graphicsQueue() VkQueue
         +presentQueue() VkQueue
-        +destroy()
+        +graphicsQueueFamily() int
+        +querySwapChainSupport(stack) SwapChainSupportDetails
     }
     class QueueFamilyIndices
     class SwapChainSupportDetails
@@ -149,26 +297,44 @@ classDiagram
         +imageFormat() int
         +imageViews() List~Long~
         +extent() VkExtent2D
-        +destroy()
     }
-    class RenderPass
-    class DepthResources
+    class RenderPass {
+        +handle() long
+    }
+    class DepthResources {
+        +imageView() long
+        +format() int
+    }
     class GraphicsPipeline {
-        +PUSH_CONSTANT_SIZE$ int
         +handle() long
         +layout() long
     }
-    class OverlayPipeline
+    class OverlayPipeline {
+        +handle() long
+    }
     class ShaderCompiler {
         +compileFromResource(path, kind)$ SPIRV
     }
-    class Framebuffers
+    class ShaderKind["ShaderCompiler.ShaderKind"] {
+        <<enumeration>>
+        VERTEX_SHADER
+        FRAGMENT_SHADER
+        GEOMETRY_SHADER
+    }
+    class SPIRV["ShaderCompiler.SPIRV"] {
+        +bytecode() ByteBuffer
+        +free()
+    }
+    class Framebuffers {
+        +handles() List~Long~
+    }
     class CommandPool {
+        +handle() long
         +beginSingleTimeCommands() VkCommandBuffer
         +endSingleTimeCommands(VkCommandBuffer)
     }
     class CommandBuffers {
-        +record(int, List~Renderable~)
+        +record(int, List~Renderable~, float alpha)
         +get(int) VkCommandBuffer
     }
     class DescriptorSetLayout {
@@ -180,14 +346,17 @@ classDiagram
         +set(int) long
     }
     class UniformBuffers {
+        +buffer(int) long
         +update(int, UniformBufferObject)
     }
     class Texture {
+        +fromEncodedImage(ctx, pool, bytes, name)$ Texture
         +solidColor(ctx, pool, r, g, b, a)$ Texture
         +imageView() long
         +sampler() long
     }
     class OverlayMesh {
+        +capacity() int
         +update(List~OverlayVertex~)
         +bind(VkCommandBuffer)
     }
@@ -204,27 +373,54 @@ classDiagram
         +fence() long
     }
     class VulkanBuffers {
+        +createBuffer(...)$
         +copyBuffer(...)$
-        +findMemoryType(...)$
+        +findMemoryType(...)$ int
     }
     class VulkanImages {
-        +createImageView(...)$
+        +createImage(...)$
+        +createImageView(...)$ long
+        +transitionImageLayout(...)$
         +copyBufferToImage(...)$
-        +findDepthFormat(ctx)$
+        +findSupportedFormat(...)$ int
+        +findDepthFormat(ctx)$ int
     }
 
     Main ..> Engine
+    Main ..> ConfigLoader
+
+    %% konfiguracja
+    ConfigLoader ..> EngineConfig : load()
+    ConfigLoader ..> ConfigException
+    EngineConfig *-- WindowConfig
+    EngineConfig *-- GraphicsConfig
+    EngineConfig *-- SimulationConfig
+    EngineConfig *-- CameraConfig
+    EngineConfig *-- ControlsConfig
+    EngineConfig *-- ShadersConfig
+    EngineConfig *-- SceneConfig
+    EngineConfig ..> ConfigException : walidacja
+    Engine --> EngineConfig
+    Engine --> FixedTimestep
+    FixedTimestep ..> SimulationConfig
 
     %% Engine posiada zasoby
     Engine --> Window
     Engine --> VulkanContext
     Engine --> CommandPool
     Engine --> "2" DescriptorSetLayout
+    Engine --> ResourceManager
     Engine --> Texture
     Engine --> Mesh
     Engine --> Material
     Engine --> "*" Renderable
     Engine --> Camera
+    Engine --> InputManager
+    Engine --> FlyCameraController
+    InputManager ..> Window : callbacki GLFW
+    FlyCameraController --> Camera
+    FlyCameraController --> InputManager
+    FlyCameraController ..> ControlsConfig
     Engine --> SyncObjects
     Engine --> FpsCounter
     Engine --> OverlayMesh
@@ -239,6 +435,15 @@ classDiagram
     Engine --> CommandBuffers
     Engine ..> UniformBufferObject
     Engine ..> SevenSegmentDigits
+    Engine ..> VulkanImages : findDepthFormat()
+
+    %% zasoby
+    ResourceManager *-- TextureManager
+    TextureManager *-- ResourceCache
+    TextureManager --> "*" Texture
+    TextureManager ..> ResourceManager : readBytes()
+    ResourceManager ..> ResourcePaths
+    ResourceCache ..> ResourcePaths
 
     %% zależności od VulkanContext
     VulkanContext ..> Window
@@ -249,11 +454,17 @@ classDiagram
     SwapChain ..> SwapChainSupportDetails
     SwapChain ..> QueueFamilyIndices
     CommandPool ..> VulkanContext
+    RenderPass ..> VulkanContext
+
+    %% obrazy i bufory
     Texture ..> CommandPool
     Texture ..> VulkanImages
+    Texture ..> VulkanBuffers
     DepthResources ..> CommandPool
     DepthResources ..> VulkanImages
-    RenderPass ..> VulkanContext
+    VulkanImages ..> CommandPool
+    VulkanImages ..> VulkanBuffers
+    VulkanBuffers ..> CommandPool
 
     %% potoki i shadery
     GraphicsPipeline ..> RenderPass
@@ -263,12 +474,16 @@ classDiagram
     OverlayPipeline ..> RenderPass
     OverlayPipeline ..> ShaderCompiler
     OverlayPipeline ..> OverlayVertex
+    ShaderCompiler ..> ShaderKind
+    ShaderCompiler ..> SPIRV : compileFromResource()
 
     %% rysowanie
     Framebuffers ..> RenderPass
     DescriptorSets ..> DescriptorSetLayout
     DescriptorSets ..> UniformBuffers
+    DescriptorSets ..> UniformBufferObject : SIZEOF
     UniformBuffers ..> VulkanBuffers
+    UniformBuffers ..> UniformBufferObject
     CommandBuffers ..> CommandPool
     CommandBuffers ..> Framebuffers
     CommandBuffers ..> RenderPass
@@ -280,13 +495,13 @@ classDiagram
 
     %% geometria
     Mesh ..> ModelLoader
+    ModelLoader ..> Model : load()
     Mesh ..> Vertex
     Mesh ..> VulkanBuffers
     Mesh ..> CommandPool
     OverlayMesh ..> OverlayVertex
     OverlayMesh ..> VulkanBuffers
     SevenSegmentDigits ..> OverlayVertex
-    UniformBuffers ..> UniformBufferObject
 
     %% obiekty sceny i materiały
     Renderable "1" *-- "n" Part

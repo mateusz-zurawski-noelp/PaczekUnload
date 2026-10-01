@@ -75,8 +75,11 @@ public final class CommandBuffers {
     /**
      * Nagrywa od nowa command buffer obrazu o danym indeksie. Wolno wywołać
      * dopiero, gdy GPU skończył go używać (patrz SyncObjects.waitIfImageInUse).
+     *
+     * @param alpha ułamek kroku symulacji (0..1) do interpolacji transformacji
+     *              obiektów - patrz FixedTimestep.alpha() i Renderable.interpolatedModelMatrix()
      */
-    public void record(int index, List<Renderable> renderables) {
+    public void record(int index, List<Renderable> renderables, float alpha) {
         VkCommandBuffer commandBuffer = buffers.get(index);
 
         try (MemoryStack stack = stackPush()) {
@@ -119,7 +122,7 @@ public final class CommandBuffers {
                         continue;
                     }
 
-                    renderable.modelMatrix(model).get(modelMatrix);
+                    renderable.interpolatedModelMatrix(alpha, model).get(modelMatrix);
                     vkCmdPushConstants(commandBuffer, pipeline.layout(), VK_SHADER_STAGE_VERTEX_BIT, 0, modelMatrix);
 
                     for (Renderable.Part part : renderable.parts()) {

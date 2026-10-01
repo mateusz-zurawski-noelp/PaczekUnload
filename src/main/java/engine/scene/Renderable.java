@@ -17,6 +17,12 @@ import java.util.List;
  * Renderable nie jest właścicielem meshy ani materiałów - tylko do nich
  * odwołuje się, więc np. sto skrzyń może współdzielić ten sam Mesh i Material.
  * Zwolnienie zasobów GPU to zadanie tego, kto je utworzył (np. Engine).
+ *
+ * Interpolacja: symulacja zmienia position/rotation/scale w stałych krokach
+ * (patrz engine.core.FixedTimestep), a ekran odświeża się w innym rytmie.
+ * Dlatego obiekt pamięta też transformację sprzed ostatniego kroku, a
+ * renderer rysuje stan pośredni ({@link #interpolatedModelMatrix}). Bez tego
+ * przy 144 Hz i 60 krokach/s obiekt "stałby" przez 2-3 klatki i skakał.
  */
 public final class Renderable {
 
@@ -33,6 +39,14 @@ public final class Renderable {
 
     /** Niewidoczne obiekty są pomijane przy rysowaniu. */
     public boolean visible = true;
+
+    // Transformacja sprzed ostatniego kroku symulacji (do interpolacji) i bufory robocze.
+    private final Vector3f previousPosition = new Vector3f();
+    private final Quaternionf previousRotation = new Quaternionf();
+    private final Vector3f previousScale = new Vector3f(1.0f, 1.0f, 1.0f);
+    private final Vector3f tmpPosition = new Vector3f();
+    private final Quaternionf tmpRotation = new Quaternionf();
+    private final Vector3f tmpScale = new Vector3f();
 
     public Renderable(String name) {
         this.name = name;
@@ -54,5 +68,36 @@ public final class Renderable {
     /** Macierz modelu (lokalne -> świat): skala, potem obrót, potem przesunięcie. */
     public Matrix4f modelMatrix(Matrix4f dest) {
         return dest.translation(position).rotate(rotation).scale(scale);
+    }
+
+    /**
+     * Zapamiętuje bieżącą transformację jako "poprzednią". Wywoływać na
+     * początku każdego kroku symulacji, PRZED zmianą position/rotation/scale.
+     */
+    public void savePreviousTransform() {
+        previousPosition.set(position);
+        previousRotation.set(rotation);
+        previousScale.set(scale);
+    }
+
+    /**
+     * Po teleportacji (np. ustawieniu obiektu w nowym miejscu poza symulacją)
+     * wołamy to, żeby renderer nie interpolował "przelotu" ze starego miejsca.
+     */
+    public void resetInterpolation() {
+        savePreviousTransform();
+    }
+
+    /**
+     * Macierz modelu dla stanu pośredniego między poprzednim a bieżącym krokiem
+     * symulacji: alpha = 0 -> poprzedni, alpha = 1 -> bieżący. Pozycja i skala
+     * interpolowane liniowo (lerp), obrót sferycznie (slerp), żeby obiekt
+     * obracał się ze stałą prędkością kątową.
+     */
+    public Matrix4f interpolatedModelMatrix(float alpha, Matrix4f dest) {
+        previousPosition.lerp(position, alpha, tmpPosition);
+        previousRotation.slerp(rotation, alpha, tmpRotation);
+        previousScale.lerp(scale, alpha, tmpScale);
+        return dest.translation(tmpPosition).rotate(tmpRotation).scale(tmpScale);
     }
 }

@@ -15,6 +15,7 @@
 
         <lwjgl.version>3.3.4</lwjgl.version>
         <joml.version>1.10.8</joml.version>
+        <gson.version>2.11.0</gson.version>
 
         <exec.mainClass>engine.Main</exec.mainClass>
     </properties>
@@ -33,6 +34,43 @@
                 <configuration>
                     <mainClass>${exec.mainClass}</mainClass>
                 </configuration>
+            </plugin>
+            <!-- "Fat jar": ./mvnw package -> target/vulkan-engine-1.0-SNAPSHOT.jar
+                 zawiera kod, zasoby, LWJGL (z natywnymi bibliotekami tego OS) i JOML,
+                 więc da się go uruchomić przez java -jar. Oryginalny cienki jar
+                 zostaje obok jako original-vulkan-engine-1.0-SNAPSHOT.jar. -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-shade-plugin</artifactId>
+                <version>3.6.0</version>
+                <executions>
+                    <execution>
+                        <phase>package</phase>
+                        <goals>
+                            <goal>shade</goal>
+                        </goals>
+                        <configuration>
+                            <createDependencyReducedPom>false</createDependencyReducedPom>
+                            <transformers>
+                                <transformer implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">
+                                    <mainClass>${exec.mainClass}</mainClass>
+                                </transformer>
+                                <transformer implementation="org.apache.maven.plugins.shade.resource.ServicesResourceTransformer"/>
+                            </transformers>
+                            <filters>
+                                <!-- Podpisy z jarów zależności byłyby nieważne w połączonym jarze. -->
+                                <filter>
+                                    <artifact>*:*</artifact>
+                                    <excludes>
+                                        <exclude>META-INF/*.SF</exclude>
+                                        <exclude>META-INF/*.DSA</exclude>
+                                        <exclude>META-INF/*.RSA</exclude>
+                                    </excludes>
+                                </filter>
+                            </filters>
+                        </configuration>
+                    </execution>
+                </executions>
             </plugin>
         </plugins>
     </build>
@@ -195,6 +233,13 @@
             <groupId>org.joml</groupId>
             <artifactId>joml</artifactId>
             <version>${joml.version}</version>
+        </dependency>
+
+        <!-- JSON: wczytywanie konfiguracji silnika (engine.config) -->
+        <dependency>
+            <groupId>com.google.code.gson</groupId>
+            <artifactId>gson</artifactId>
+            <version>${gson.version}</version>
         </dependency>
     </dependencies>
 
