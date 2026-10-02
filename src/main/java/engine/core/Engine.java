@@ -13,6 +13,7 @@ import engine.scene.Renderable;
 import engine.scene.SceneLighting;
 import engine.scene.UniformBufferObject;
 import engine.ui.BakedFont;
+import engine.ui.DebugConsole;
 import engine.ui.FontAtlas;
 import engine.ui.TextBatch;
 import engine.vulkan.*;
@@ -77,6 +78,7 @@ public final class Engine {
     private DescriptorSetLayout overlayLayout;
     private FontAtlas font;
     private TextBatch overlay;
+    private DebugConsole console;
 
     // Zasoby zależne od swapchaina - odtwarzane przy resize okna
     private SwapChain swapChain;
@@ -142,6 +144,7 @@ public final class Engine {
         BakedFont bakedFont = bakeFont(config.ui());
         font = new FontAtlas(ctx, commandPool, overlayLayout, bakedFont);
         overlay = new TextBatch(bakedFont, OVERLAY_CAPACITY);
+        console = new DebugConsole(input);
 
         createSwapChainDependentObjects();
 
@@ -324,6 +327,16 @@ public final class Engine {
      * czytać stan ciągły (isKeyDown).
      */
     private void frameUpdate(float frameTime) {
+        // Konsola dostaje wejście pierwsza. Gdy jest (albo w tej klatce była)
+        // otwarta, klawisze i mysz należą do niej: Esc zamyka konsolę, a nie
+        // silnik, a kamera stoi - kursor zostaje odblokowany.
+        boolean consoleHadInput = console.isCapturingInput();
+        console.update(frameTime);
+        if (consoleHadInput || console.isCapturingInput()) {
+            input.setCursorCaptured(false);
+            return;
+        }
+
         if (input.wasKeyPressed(GLFW_KEY_ESCAPE)) {
             window.requestClose();
         }
@@ -353,7 +366,7 @@ public final class Engine {
         }
     }
 
-    /** Buduje nakładkę 2D tej klatki: na razie licznik FPS w prawym górnym rogu. */
+    /** Buduje nakładkę 2D tej klatki: licznik FPS w prawym górnym rogu i konsola. */
     private void updateOverlay(int imageIndex) {
         int width = swapChain.extent().width();
         int height = swapChain.extent().height();
@@ -369,6 +382,9 @@ public final class Engine {
 
         overlay.rect(left, margin, right, bottom, PANEL_BACKGROUND);
         overlay.text(fps, left + padding, margin + padding, FPS_COLOR);
+
+        // Konsola rysowana na końcu - wysunięta przykrywa resztę nakładki.
+        console.draw(overlay, width, height);
 
         overlayMesh.update(imageIndex, overlay);
     }

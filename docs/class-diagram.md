@@ -101,6 +101,7 @@ classDiagram
         +log(LogLevel, channel, message)$
         +isEnabled(LogLevel)$ boolean
         +recent(int max)$ List~LogEntry~
+        +since(long afterSequence)$ List~LogEntry~
         +lastSequence()$ long
     }
     class LogLevel {
@@ -150,6 +151,7 @@ classDiagram
         -DescriptorSetLayout overlayLayout
         -FontAtlas font
         -TextBatch overlay
+        -DebugConsole console
         -OverlayMesh overlayMesh
         -SwapChain swapChain
         -RenderPass renderPass
@@ -344,6 +346,11 @@ classDiagram
     class FontAtlas {
         +FontAtlas(ctx, pool, layout, BakedFont)
         +descriptorSet() long
+    }
+    class DebugConsole {
+        +update(float frameTime)
+        +draw(TextBatch, width, height)
+        +isCapturingInput() boolean
     }
     class TextBatch {
         +begin(width, height)
@@ -546,6 +553,10 @@ classDiagram
     UniformBufferObject --> SceneLighting
     Engine --> FontAtlas
     Engine --> TextBatch
+    Engine --> DebugConsole
+    DebugConsole --> InputManager
+    DebugConsole ..> Log : since()
+    DebugConsole ..> TextBatch
     Engine ..> BakedFont : bakeFont()
     BakedFont *-- Glyph
     FontAtlas ..> BakedFont

@@ -34,7 +34,15 @@ zależności (LWJGL, JOML) — potrwa chwilę, potem jest szybciej.
 | Shift | szybszy ruch |
 | kółko myszy | zoom (pole widzenia) |
 | R | powrót kamery do pozycji startowej |
-| Esc | zamknięcie okna |
+| Esc | zamknięcie okna (gdy konsola jest otwarta - zamknięcie konsoli) |
+| ~ (klawisz pod Esc) | konsola silnika: otwórz / zamknij |
+| PageUp / PageDown, kółko myszy | przewijanie konsoli (gdy otwarta) |
+| Home / End | początek historii / powrót do najnowszych wpisów |
+
+Konsola pokazuje na żywo wpisy z logu silnika (kolory wg poziomu). Gdy jest
+otwarta, kamera nie reaguje na klawisze i mysz. Gdy jest zamknięta, a
+pojawią się nowe ostrzeżenia lub błędy, w lewym górnym rogu wyświetla się
+czerwona plakietka z ich liczbą.
 
 Prędkość, czułość myszy i odwrócenie osi Y ustawisz w sekcji `controls`
 konfiguracji (patrz niżej).
@@ -149,6 +157,7 @@ src/main/java/engine/
     BakedFont.java               czcionka TTF wypalona do bitmapy (stb_truetype) + położenie każdego znaku
     FontAtlas.java               ta bitmapa jako tekstura na GPU + descriptor set dla shadera
     TextBatch.java               składa napisy i prostokąty (tła) w wierzchołki nakładki na jedną klatkę
+    DebugConsole.java            konsola w stylu Quake (~): wpisy z logu, zawijanie, przewijanie, plakietka błędów
     OverlayVertex.java           layout wierzchołka nakładki 2D (pozycja NDC, UV w atlasie, kolor RGBA)
 
 src/main/resources/

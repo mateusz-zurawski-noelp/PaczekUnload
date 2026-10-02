@@ -232,10 +232,16 @@ AI wcześniej.
   składa napisy i półprzezroczyste tła w jedną tablicę wierzchołków
   rysowaną jednym poleceniem (`OverlayPipeline` z mieszaniem alfa).
   Zastąpiło wyświetlacz 7-segmentowy licznika FPS. Polskie znaki są.
-- **Następne kroki (uzgodnione):** ~~`Logger` z poziomami i buforem
-  cyklicznym~~ (zrobione, patrz punkt 0, "Logowanie"), potem konsola na ekranie w
-  stylu Quake (klawisz `~`, przewijanie PageUp/PageDown, kolory wg
-  poziomu, na razie bez wpisywania poleceń) - zbudowana na `TextBatch`.
+- **Konsola silnika - zrobione:** ~~`Logger` z poziomami i buforem
+  cyklicznym~~ (patrz punkt 0, "Logowanie"), konsola na ekranie w stylu
+  Quake: `engine.ui.DebugConsole` - wysuwana klawiszem `~` (z animacją),
+  wpisy z `Log` pobierane przyrostowo (`Log.since`) i zawijane do
+  szerokości ekranu raz, kolory wg poziomu, przewijanie PageUp/PageDown/
+  kółko/Home/End, Esc zamyka konsolę zamiast silnika, kamera wstrzymana gdy
+  otwarta, plakietka z liczbą nowych WARN/ERROR gdy zamknięta.
+- **Następny krok tutaj:** wpisywanie poleceń w konsoli (pole tekstowe +
+  rejestr komend, np. `set graphics.vsync true`, `reload shaders`) - wymaga
+  callbacka znaków GLFW (`glfwSetCharCallback`) w `InputManager`.
 
 ## Rekomendowana kolejność najbliższych kroków
 
