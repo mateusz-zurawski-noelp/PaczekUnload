@@ -1,5 +1,8 @@
 package engine.core;
 
+import engine.log.Log;
+import org.lwjgl.glfw.GLFWErrorCallback;
+
 import static org.lwjgl.glfw.Callbacks.glfwFreeCallbacks;
 import static org.lwjgl.glfw.GLFW.*;
 import static org.lwjgl.system.MemoryUtil.NULL;
@@ -15,6 +18,11 @@ public final class Window {
     private boolean framebufferResized;
 
     public Window(int width, int height, String title) {
+        // Błędy GLFW (np. brak wsparcia Vulkana, zły tryb okna) domyślnie giną bez śladu -
+        // przekierowujemy je do logu. Callback ustawia się jeszcze przed glfwInit.
+        glfwSetErrorCallback((error, description) ->
+                Log.error("GLFW", "Błąd 0x" + Integer.toHexString(error) + ": " + GLFWErrorCallback.getDescription(description)));
+
         if (!glfwInit()) {
             throw new RuntimeException("Nie udało się zainicjalizować GLFW");
         }
@@ -70,5 +78,9 @@ public final class Window {
         glfwFreeCallbacks(handle);
         glfwDestroyWindow(handle);
         glfwTerminate();
+        GLFWErrorCallback previous = glfwSetErrorCallback(null);
+        if (previous != null) {
+            previous.free();
+        }
     }
 }

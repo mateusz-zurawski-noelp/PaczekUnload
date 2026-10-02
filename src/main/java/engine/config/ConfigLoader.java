@@ -5,6 +5,7 @@ import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParseException;
 import com.google.gson.JsonParser;
+import engine.log.Log;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -65,11 +66,11 @@ public final class ConfigLoader {
         JsonObject merged = readDefaults();
 
         if (userFile != null) {
-            System.out.println("[Config] Wczytuję konfigurację: " + userFile.toAbsolutePath());
+            Log.info("Config", "Wczytuję konfigurację: " + userFile.toAbsolutePath());
             JsonObject user = readUserFile(userFile);
             mergeInto(merged, user, "");
         } else {
-            System.out.println("[Config] Brak " + DEFAULT_USER_CONFIG + " - używam konfiguracji domyślnej");
+            Log.info("Config", "Brak " + DEFAULT_USER_CONFIG + " - używam konfiguracji domyślnej");
         }
 
         return toConfig(merged, userFile != null ? userFile.toString() : DEFAULTS_RESOURCE);
@@ -118,7 +119,7 @@ public final class ConfigLoader {
             JsonElement existing = target.get(key);
 
             if (existing == null) {
-                System.err.println("[Config] Nieznany klucz \"" + path + "\" - pomijam (literówka?)");
+                Log.warn("Config", "Nieznany klucz \"" + path + "\" - pomijam (literówka?)");
                 continue;
             }
             if (existing.isJsonObject() && value.isJsonObject()) {

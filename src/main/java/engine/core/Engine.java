@@ -2,6 +2,7 @@ package engine.core;
 
 import engine.config.EngineConfig;
 import engine.input.InputManager;
+import engine.log.Log;
 import engine.resource.ResourceManager;
 import engine.scene.Camera;
 import engine.scene.FlyCameraController;
@@ -101,6 +102,7 @@ public final class Engine {
     }
 
     private void init() {
+        long start = System.nanoTime();
         EngineConfig.Window windowConfig = config.window();
         window = new Window(windowConfig.width(), windowConfig.height(), windowConfig.title());
         input = new InputManager(window);
@@ -144,12 +146,20 @@ public final class Engine {
         createSwapChainDependentObjects();
 
         sync = new SyncObjects(ctx, swapChain.imageCount(), config.graphics().maxFramesInFlight());
+
+        Log.info("Engine", "Swapchain " + swapChain.extent().width() + "x" + swapChain.extent().height()
+                + ", obrazów: " + swapChain.imageCount() + ", klatek w locie: " + config.graphics().maxFramesInFlight());
+        Log.info("Engine", "Start zakończony w " + (System.nanoTime() - start) / 1_000_000 + " ms");
     }
 
     private BakedFont bakeFont(EngineConfig.Ui uiConfig) {
         ByteBuffer fontData = resources.readBytes(uiConfig.font());
         try {
-            return BakedFont.bake(fontData, uiConfig.font(), uiConfig.fontSize());
+            long start = System.nanoTime();
+            BakedFont baked = BakedFont.bake(fontData, uiConfig.font(), uiConfig.fontSize());
+            Log.info("UI", "Czcionka " + uiConfig.font() + ", " + uiConfig.fontSize() + " px ("
+                    + (System.nanoTime() - start) / 1_000_000 + " ms)");
+            return baked;
         } finally {
             MemoryUtil.memFree(fontData);
         }
@@ -209,6 +219,7 @@ public final class Engine {
 
         cleanupSwapChainDependentObjects();
         createSwapChainDependentObjects();
+        Log.debug("Engine", () -> "Swapchain odtworzony: " + swapChain.extent().width() + "x" + swapChain.extent().height());
     }
 
     /**
@@ -375,6 +386,7 @@ public final class Engine {
     }
 
     private void cleanup() {
+        Log.info("Engine", "Zamykanie");
         cleanupSwapChainDependentObjects();
 
         sync.destroy();

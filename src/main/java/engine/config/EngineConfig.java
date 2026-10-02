@@ -1,5 +1,6 @@
 package engine.config;
 
+import engine.log.LogLevel;
 import org.joml.Vector3f;
 
 /**
@@ -13,6 +14,7 @@ import org.joml.Vector3f;
  * Wczytywanie i łączenie z wartościami domyślnymi: {@link ConfigLoader}.
  */
 public record EngineConfig(
+        Logging log,
         Window window,
         Graphics graphics,
         Simulation simulation,
@@ -24,6 +26,7 @@ public record EngineConfig(
         Scene scene) {
 
     public EngineConfig {
+        require(log != null, "brak sekcji log");
         require(window != null, "brak sekcji window");
         require(graphics != null, "brak sekcji graphics");
         require(simulation != null, "brak sekcji simulation");
@@ -33,6 +36,19 @@ public record EngineConfig(
         require(ui != null, "brak sekcji ui");
         require(shaders != null, "brak sekcji shaders");
         require(scene != null, "brak sekcji scene");
+    }
+
+    /**
+     * Logowanie (engine.log.Log).
+     *
+     * @param level       najniższy zapisywany poziom: DEBUG, INFO, WARN albo ERROR
+     * @param historySize ile ostatnich wpisów trzymać w pamięci (dla konsoli na ekranie)
+     */
+    public record Logging(LogLevel level, int historySize) {
+        public Logging {
+            require(level != null, "log.level musi być jednym z: DEBUG, INFO, WARN, ERROR");
+            require(historySize >= 10 && historySize <= 100_000, "log.historySize musi być w zakresie 10..100000");
+        }
     }
 
     public record Window(int width, int height, String title) {

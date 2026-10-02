@@ -1,5 +1,6 @@
 package engine.scene;
 
+import engine.log.Log;
 import engine.resource.ResourceManager;
 import engine.vulkan.CommandPool;
 import engine.vulkan.VulkanBuffers;
@@ -65,6 +66,7 @@ public final class Mesh {
      */
     public static Mesh loadFromFile(VulkanContext ctx, CommandPool commandPool, ResourceManager resources, String modelPath) {
 
+        long start = System.nanoTime();
         ByteBuffer fileData = resources.readBytes(modelPath);
         // GenSmoothNormals: jeśli plik nie ma normalnych (chalet.obj nie ma), Assimp
         // wylicza je, uśredniając normalne ścian stykających się w wierzchołku -
@@ -98,7 +100,10 @@ public final class Mesh {
             indices[i] = model.indices.get(i);
         }
 
-        return new Mesh(ctx, commandPool, vertices, indices);
+        Mesh mesh = new Mesh(ctx, commandPool, vertices, indices);
+        Log.info("Resources", String.format("Model %s: %,d wierzchołków, %,d trójkątów (%d ms)",
+                modelPath, vertices.length, indices.length / 3, (System.nanoTime() - start) / 1_000_000));
+        return mesh;
     }
 
     private interface BufferWriter {

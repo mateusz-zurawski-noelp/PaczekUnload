@@ -30,6 +30,16 @@ commitowi albo branchowi. Ułatwia to też wracanie do konkretnego etapu nauki.
   rozsiane po klasach Vulkana. Osobny `Logger` z poziomami (`info/warn/error`)
   ułatwi diagnozowanie, gdy dojdą podsystemy działające asynchronicznie
   (audio, streaming zasobów).
+  **Zrobione:** pakiet `engine.log` - statyczna fasada `Log` (`debug` z
+  leniwym `Supplier`, `info`, `warn`, `error` z wyjątkiem), poziomy
+  `LogLevel`, kanały (np. "Vulkan", "Config", "Resources"), czas od startu
+  i wątek w każdym `LogEntry`, bufor cykliczny ostatnich wpisów
+  (`Log.recent`, `Log.lastSequence` - pod konsolę na ekranie), bezpieczny
+  wątkowo. Sekcja `log` w konfiguracji (`level`, `historySize`). Wszystkie
+  `System.out/err` zastąpione; doszły: błędy GLFW, komunikaty warstw
+  walidacyjnych z poziomami (VERBOSE/INFO jako DEBUG), wybrana karta
+  graficzna, czasy wczytywania, nieobsłużone wyjątki w `Main`.
+  Do rozważenia później: zapis logu do pliku.
 - **Asercje.** Gregory mocno naciska na asercje jako narzędzie odławiania
   błędów w debug buildzie. Warto opakować powtarzalny wzorzec
   `if (vkXxx(...) != VK_SUCCESS) throw ...` w jedną metodę `VkCheck.require(...)`.
@@ -222,8 +232,8 @@ AI wcześniej.
   składa napisy i półprzezroczyste tła w jedną tablicę wierzchołków
   rysowaną jednym poleceniem (`OverlayPipeline` z mieszaniem alfa).
   Zastąpiło wyświetlacz 7-segmentowy licznika FPS. Polskie znaki są.
-- **Następne kroki (uzgodnione):** `Logger` z poziomami i buforem
-  cyklicznym (patrz punkt 0, "Logowanie"), potem konsola na ekranie w
+- **Następne kroki (uzgodnione):** ~~`Logger` z poziomami i buforem
+  cyklicznym~~ (zrobione, patrz punkt 0, "Logowanie"), potem konsola na ekranie w
   stylu Quake (klawisz `~`, przewijanie PageUp/PageDown, kolory wg
   poziomu, na razie bez wpisywania poleceń) - zbudowana na `TextBatch`.
 

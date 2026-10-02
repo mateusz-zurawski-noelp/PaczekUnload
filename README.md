@@ -41,9 +41,9 @@ konfiguracji (patrz niżej).
 
 ### Konfiguracja
 
-Ustawienia silnika (okno, vsync, liczba klatek "w locie", warstwy
-walidacyjne, krok symulacji, kamera, sterowanie, oświetlenie, ścieżki
-shaderów/modelu/tekstury) są w
+Ustawienia silnika (poziom logowania, okno, vsync, liczba klatek "w locie",
+warstwy walidacyjne, krok symulacji, kamera, sterowanie, oświetlenie,
+czcionka nakładki, ścieżki shaderów/modelu/tekstury) są w
 `src/main/resources/config/engine-defaults.json`. Żeby je zmienić bez
 przebudowy, połóż w katalogu roboczym plik `engine.json` z samymi kluczami,
 które chcesz nadpisać, np.:
@@ -59,6 +59,13 @@ Można też podać ścieżkę jawnie: `java -jar target/vulkan-engine-1.0-SNAPSH
 albo `./mvnw exec:java -Dexec.args="moj-config.json"`. Nieznane klucze
 (np. literówka `"widht"`) są zgłaszane w konsoli, a nieprawidłowe wartości
 zatrzymują start z opisem, co jest nie tak.
+
+### Log
+
+Silnik wypisuje komunikaty w formacie `[czas od startu] POZIOM kanał | treść`,
+np. `[   0.412] INFO  Vulkan     | GPU: ...`. Ostrzeżenia i błędy idą na
+stderr. Więcej szczegółów (m.in. gadatliwe komunikaty warstw walidacyjnych)
+pokaże `"log": { "level": "DEBUG" }` w `engine.json`.
 
 ### Samodzielny jar
 
@@ -91,6 +98,10 @@ sudo apt install vulkan-validationlayers   # Debian/Ubuntu
 ```
 src/main/java/engine/
   Main.java                 punkt wejścia (wczytuje konfigurację i startuje Engine)
+  log/
+    Log.java                 centralne logowanie: poziomy, kanały, konsola systemowa + bufor ostatnich wpisów
+    LogLevel.java            DEBUG / INFO / WARN / ERROR
+    LogEntry.java            jeden wpis: czas od startu, poziom, kanał, treść, wątek
   config/
     EngineConfig.java        rekordy konfiguracji z walidacją (okno, grafika, kamera, sterowanie, shadery, scena)
     ConfigLoader.java        wczytywanie JSON: wartości domyślne + nadpisania z engine.json

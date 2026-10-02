@@ -1,5 +1,6 @@
 package engine.resource;
 
+import engine.log.Log;
 import engine.vulkan.CommandPool;
 import engine.vulkan.VulkanContext;
 import org.lwjgl.system.MemoryUtil;
@@ -92,7 +93,7 @@ public final class ResourceManager {
 
     private static void reportLeaks(String kind, List<String> leaked) {
         for (String path : leaked) {
-            System.err.println("[ResourceManager] Niezwolniony zasób (" + kind + "): " + path);
+            Log.warn("Resources", "Niezwolniony zasób (" + kind + "): " + path);
         }
     }
 }

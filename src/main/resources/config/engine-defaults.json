@@ -1,4 +1,8 @@
 {
+  "log": {
+    "level": "INFO",
+    "historySize": 1000
+  },
   "window": {
     "width": 1280,
     "height": 720,

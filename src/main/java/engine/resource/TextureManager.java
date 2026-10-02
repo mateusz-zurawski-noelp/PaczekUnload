@@ -1,5 +1,6 @@
 package engine.resource;
 
+import engine.log.Log;
 import engine.vulkan.CommandPool;
 import engine.vulkan.Texture;
 import engine.vulkan.VulkanContext;
@@ -31,9 +32,12 @@ public final class TextureManager {
     }
 
     private static Texture load(ResourceManager resources, VulkanContext ctx, CommandPool commandPool, String path) {
+        long start = System.nanoTime();
         ByteBuffer encoded = resources.readBytes(path);
         try {
-            return Texture.fromEncodedImage(ctx, commandPool, encoded, path);
+            Texture texture = Texture.fromEncodedImage(ctx, commandPool, encoded, path);
+            Log.info("Resources", "Tekstura " + path + " (" + (System.nanoTime() - start) / 1_000_000 + " ms)");
+            return texture;
         } finally {
             MemoryUtil.memFree(encoded);
         }

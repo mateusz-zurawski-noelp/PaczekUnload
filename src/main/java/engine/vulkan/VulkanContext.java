@@ -1,6 +1,8 @@
 package engine.vulkan;
 
 import engine.core.Window;
+import engine.log.Log;
+import engine.log.LogLevel;
 import org.lwjgl.PointerBuffer;
 import org.lwjgl.system.MemoryStack;
 import org.lwjgl.vulkan.*;
@@ -47,7 +49,7 @@ public final class VulkanContext {
         if (validationLayersSupported()) {
             return true;
         }
-        System.err.println("[Vulkan] Warstwy walidacyjne (VK_LAYER_KHRONOS_validation) nie są zainstalowane - " +
+        Log.warn("Vulkan", "Warstwy walidacyjne (VK_LAYER_KHRONOS_validation) nie są zainstalowane - " +
                 "uruchamiam bez nich. Zainstaluj Vulkan SDK albo pakiet vulkan-validationlayers, " +
                 "żeby dostawać czytelne komunikaty o błędnym użyciu API.");
         return false;
@@ -71,6 +73,7 @@ public final class VulkanContext {
         debugMessenger = validationLayersEnabled ? setupDebugMessenger(instance) : VK_NULL_HANDLE;
         surface = createSurface(instance, window);
         physicalDevice = pickPhysicalDevice(instance, surface);
+        logDeviceInfo(physicalDevice, validationLayersEnabled);
 
         QueueFamilyIndices indices = findQueueFamilies(physicalDevice, surface);
         graphicsQueueFamily = indices.graphicsFamily;
@@ -192,6 +195,7 @@ public final class VulkanContext {
     private static void populateDebugMessengerCreateInfo(VkDebugUtilsMessengerCreateInfoEXT createInfo) {
         createInfo.sType(VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT);
         createInfo.messageSeverity(VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT
+                | VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT
                 | VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT
                 | VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT);
         createInfo.messageType(VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT
@@ -200,10 +204,56 @@ public final class VulkanContext {
         createInfo.pfnUserCallback(VulkanContext::debugCallback);
     }
 
+    /**
+     * Komunikaty warstw walidacyjnych trafiają do logu z poziomem zależnym od
+     * ich wagi. VERBOSE i INFO to bardzo gadatliwe szczegóły (np. "wczytano
+     * warstwę X") - idą jako DEBUG, więc domyślnie są ukryte (log.level = DEBUG
+     * je pokaże). Callback może być wołany z wątków sterownika - Log to znosi.
+     */
     private static int debugCallback(int messageSeverity, int messageType, long pCallbackData, long pUserData) {
+        LogLevel level;
+        if ((messageSeverity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT) != 0) {
+            level = LogLevel.ERROR;
+        } else if ((messageSeverity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT) != 0) {
+            level = LogLevel.WARN;
+        } else {
+            level = LogLevel.DEBUG;
+        }
+        if (!Log.isEnabled(level)) {
+            return VK_FALSE;
+        }
+
+        String type;
+        if ((messageType & VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT) != 0) {
+            type = "walidacja";
+        } else if ((messageType & VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT) != 0) {
+            type = "wydajność";
+        } else {
+            type = "ogólne";
+        }
         VkDebugUtilsMessengerCallbackDataEXT callbackData = VkDebugUtilsMessengerCallbackDataEXT.create(pCallbackData);
-        System.err.println("[validation layer] " + callbackData.pMessageString());
+        Log.log(level, "Vulkan", "[" + type + "] " + callbackData.pMessageString());
         return VK_FALSE;
+    }
+
+    private static void logDeviceInfo(VkPhysicalDevice device, boolean validationLayersEnabled) {
+        try (MemoryStack stack = stackPush()) {
+            VkPhysicalDeviceProperties properties = VkPhysicalDeviceProperties.malloc(stack);
+            vkGetPhysicalDeviceProperties(device, properties);
+
+            String type = switch (properties.deviceType()) {
+                case VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU -> "karta dedykowana";
+                case VK_PHYSICAL_DEVICE_TYPE_INTEGRATED_GPU -> "zintegrowana";
+                case VK_PHYSICAL_DEVICE_TYPE_VIRTUAL_GPU -> "wirtualna";
+                case VK_PHYSICAL_DEVICE_TYPE_CPU -> "programowa (CPU)";
+                default -> "inna";
+            };
+            int api = properties.apiVersion();
+            String apiVersion = (api >>> 22) + "." + ((api >>> 12) & 0x3FF) + "." + (api & 0xFFF);
+
+            Log.info("Vulkan", "GPU: " + properties.deviceNameString() + " (" + type + "), Vulkan " + apiVersion
+                    + ", warstwy walidacyjne: " + (validationLayersEnabled ? "włączone" : "wyłączone"));
+        }
     }
 
     private static long setupDebugMessenger(VkInstance instance) {

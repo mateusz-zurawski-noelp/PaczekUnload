@@ -89,6 +89,43 @@ classDiagram
         +float rotationDegreesPerSecond
     }
 
+    %% ---------- log ----------
+    class Log {
+        +configure(LogLevel, int historySize)$
+        +debug(channel, message)$
+        +debug(channel, Supplier)$
+        +info(channel, message)$
+        +warn(channel, message)$
+        +error(channel, message)$
+        +error(channel, message, Throwable)$
+        +log(LogLevel, channel, message)$
+        +isEnabled(LogLevel)$ boolean
+        +recent(int max)$ List~LogEntry~
+        +lastSequence()$ long
+    }
+    class LogLevel {
+        <<enumeration>>
+        DEBUG
+        INFO
+        WARN
+        ERROR
+    }
+    class LogEntry {
+        <<record>>
+        +long sequence
+        +double timeSeconds
+        +LogLevel level
+        +String channel
+        +String message
+        +String thread
+        +format() String
+    }
+    class LoggingConfig["EngineConfig.Logging"] {
+        <<record>>
+        +LogLevel level
+        +int historySize
+    }
+
     %% ---------- core ----------
     class Engine {
         -EngineConfig config
@@ -448,6 +485,15 @@ classDiagram
 
     Main ..> Engine
     Main ..> ConfigLoader
+    Main ..> Log : configure()
+    Log *-- LogEntry
+    LogEntry --> LogLevel
+    EngineConfig *-- LoggingConfig
+    LoggingConfig --> LogLevel
+    ConfigLoader ..> Log
+    VulkanContext ..> Log : warstwy walidacyjne
+    Window ..> Log : błędy GLFW
+    Engine ..> Log
 
     %% konfiguracja
     ConfigLoader ..> EngineConfig : load()
