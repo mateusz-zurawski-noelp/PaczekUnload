@@ -10,14 +10,20 @@ import engine.scene.Material;
 import engine.scene.Mesh;
 import engine.scene.Renderable;
 import engine.scene.SceneLighting;
-import engine.scene.SevenSegmentDigits;
 import engine.scene.UniformBufferObject;
+import engine.ui.BakedFont;
+import engine.ui.FontAtlas;
+import engine.ui.TextBatch;
 import engine.vulkan.*;
 import org.joml.Vector3f;
+import org.joml.Vector4f;
+import org.joml.Vector4fc;
+import org.lwjgl.system.MemoryUtil;
 import org.lwjgl.system.MemoryStack;
 import org.lwjgl.vulkan.VkPresentInfoKHR;
 import org.lwjgl.vulkan.VkSubmitInfo;
 
+import java.nio.ByteBuffer;
 import java.nio.IntBuffer;
 import java.util.ArrayList;
 import java.util.List;
@@ -40,6 +46,12 @@ import static org.lwjgl.vulkan.VK10.*;
  */
 public final class Engine {
 
+    /** Najwięcej wierzchołków nakładki 2D na klatkę (6 na znak lub prostokąt). */
+    private static final int OVERLAY_CAPACITY = 65536;
+
+    private static final Vector4fc PANEL_BACKGROUND = new Vector4f(0.0f, 0.0f, 0.0f, 0.55f);
+    private static final Vector4fc FPS_COLOR = new Vector4f(0.95f, 0.85f, 0.15f, 1.0f);
+
     private final EngineConfig config;
     private final FixedTimestep timestep;
 
@@ -61,7 +73,9 @@ public final class Engine {
     private FlyCameraController cameraController;
     private SyncObjects sync;
     private FpsCounter fpsCounter;
-    private OverlayMesh overlayMesh;
+    private DescriptorSetLayout overlayLayout;
+    private FontAtlas font;
+    private TextBatch overlay;
 
     // Zasoby zależne od swapchaina - odtwarzane przy resize okna
     private SwapChain swapChain;
@@ -69,6 +83,7 @@ public final class Engine {
     private DepthResources depthResources;
     private GraphicsPipeline pipeline;
     private OverlayPipeline overlayPipeline;
+    private OverlayMesh overlayMesh;
     private Framebuffers framebuffers;
     private UniformBuffers uniformBuffers;
     private DescriptorSets descriptorSets;
@@ -121,11 +136,23 @@ public final class Engine {
         lighting = createLighting(config.lighting(), cameraConfig.upVec());
 
         fpsCounter = new FpsCounter();
-        overlayMesh = new OverlayMesh(ctx, SevenSegmentDigits.VERTEX_COUNT);
+        overlayLayout = DescriptorSetLayout.singleTexture(ctx);
+        BakedFont bakedFont = bakeFont(config.ui());
+        font = new FontAtlas(ctx, commandPool, overlayLayout, bakedFont);
+        overlay = new TextBatch(bakedFont, OVERLAY_CAPACITY);
 
         createSwapChainDependentObjects();
 
         sync = new SyncObjects(ctx, swapChain.imageCount(), config.graphics().maxFramesInFlight());
+    }
+
+    private BakedFont bakeFont(EngineConfig.Ui uiConfig) {
+        ByteBuffer fontData = resources.readBytes(uiConfig.font());
+        try {
+            return BakedFont.bake(fontData, uiConfig.font(), uiConfig.fontSize());
+        } finally {
+            MemoryUtil.memFree(fontData);
+        }
     }
 
     private static SceneLighting createLighting(EngineConfig.Lighting lightingConfig, Vector3f worldUp) {
@@ -145,18 +172,20 @@ public final class Engine {
         depthResources = new DepthResources(ctx, commandPool, swapChain.extent());
         pipeline = new GraphicsPipeline(ctx, renderPass, frameLayout, materialLayout, swapChain.extent(),
                 config.shaders().modelVertex(), config.shaders().modelFragment());
-        overlayPipeline = new OverlayPipeline(ctx, renderPass, swapChain.extent(),
+        overlayPipeline = new OverlayPipeline(ctx, renderPass, overlayLayout, swapChain.extent(),
                 config.shaders().overlayVertex(), config.shaders().overlayFragment());
         framebuffers = new Framebuffers(ctx, renderPass, swapChain.imageViews(), depthResources.imageView(), swapChain.extent());
         uniformBuffers = new UniformBuffers(ctx, swapChain.imageCount());
+        overlayMesh = new OverlayMesh(ctx, swapChain.imageCount(), OVERLAY_CAPACITY);
         descriptorSets = new DescriptorSets(ctx, frameLayout, swapChain.imageCount(), uniformBuffers);
         commandBuffers = new CommandBuffers(ctx, commandPool, framebuffers, renderPass, swapChain.extent(),
-                pipeline, descriptorSets, overlayPipeline, overlayMesh);
+                pipeline, descriptorSets, overlayPipeline, overlayMesh, font.descriptorSet());
     }
 
     private void cleanupSwapChainDependentObjects() {
         commandBuffers.destroy();
         descriptorSets.destroy();
+        overlayMesh.destroy();
         uniformBuffers.destroy();
         framebuffers.destroy();
         overlayPipeline.destroy();
@@ -235,7 +264,7 @@ public final class Engine {
 
             fpsCounter.onFrameRendered();
             updateUniformBuffer(imageIndex);
-            overlayMesh.update(SevenSegmentDigits.buildFps(fpsCounter.fps(), swapChain.extent().width(), swapChain.extent().height()));
+            updateOverlay(imageIndex);
             commandBuffers.record(imageIndex, renderables, alpha);
 
             VkSubmitInfo submitInfo = VkSubmitInfo.calloc(stack);
@@ -313,6 +342,26 @@ public final class Engine {
         }
     }
 
+    /** Buduje nakładkę 2D tej klatki: na razie licznik FPS w prawym górnym rogu. */
+    private void updateOverlay(int imageIndex) {
+        int width = swapChain.extent().width();
+        int height = swapChain.extent().height();
+        overlay.begin(width, height);
+
+        String fps = fpsCounter.fps() + " FPS";
+        float padding = 8.0f;
+        float margin = 16.0f;
+        float textWidth = overlay.measure(fps);
+        float right = width - margin;
+        float left = right - textWidth - 2 * padding;
+        float bottom = margin + overlay.lineHeight() + 2 * padding;
+
+        overlay.rect(left, margin, right, bottom, PANEL_BACKGROUND);
+        overlay.text(fps, left + padding, margin + padding, FPS_COLOR);
+
+        overlayMesh.update(imageIndex, overlay);
+    }
+
     private void updateUniformBuffer(int imageIndex) {
 
         UniformBufferObject ubo = new UniformBufferObject(lighting);
@@ -329,7 +378,8 @@ public final class Engine {
         cleanupSwapChainDependentObjects();
 
         sync.destroy();
-        overlayMesh.destroy();
+        font.destroy();
+        overlayLayout.destroy();
         chaletMaterial.destroy();
         chaletMesh.destroy();
         resources.textures().release(chaletTexture);

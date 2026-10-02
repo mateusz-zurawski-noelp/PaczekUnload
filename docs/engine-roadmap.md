@@ -152,6 +152,11 @@ To już jest główny ciężar tego repo, więc naturalnie najdalej zaszedł.
      (specular z `specularColor`/`shininess`) + `reflectivity` jako odbicie
      gradientu niebo/ziemia (zamiast prawdziwej cubemapy); sekcja `lighting`
      w konfiguracji (kierunek, kolory, natężenie, opcjonalny obieg słońca).
+     **Następne kroki (do powrotu):** wiele świateł (tablica w buforze
+     zamiast jednego słońca), potem cienie (mapa głębi z punktu widzenia
+     światła). Punkt wyjścia w kodzie: `SceneLighting` i jego zapis w
+     `UniformBufferObject.write` (dziś jedno słońce w UBO "per klatka") oraz
+     pętla po światłach w `model.frag` zamiast pojedynczego `frame.sunDirection`.
   2. **Wiele świateł** - tablica świateł w buforze zamiast jednego.
   3. **Culling i sortowanie** - przy większej liczbie `Renderable` filtrowanie
      po frustumie kamery i sortowanie rysowania po materiale/pipeline, żeby
@@ -210,6 +215,17 @@ AI wcześniej.
 - Prosty debug UI w locie (np. Dear ImGui przez bindingi LWJGL) do
   podglądu/edycji parametrów `Material` (kolor, połysk, reflectivity) na
   żywo - bardzo skraca iterację przy pracy nad rozdziałem o renderowaniu.
+- **Warstwa tekstu - zrobione:** pakiet `engine.ui`. Czcionka TTF
+  (DejaVu Sans Mono, `ui.font`/`ui.fontSize` w konfiguracji) wypalana przy
+  starcie przez `stb_truetype` do atlasu 1024x1024 (`BakedFont`, z
+  oversamplingiem 2x2), wgrywana jako tekstura (`FontAtlas`); `TextBatch`
+  składa napisy i półprzezroczyste tła w jedną tablicę wierzchołków
+  rysowaną jednym poleceniem (`OverlayPipeline` z mieszaniem alfa).
+  Zastąpiło wyświetlacz 7-segmentowy licznika FPS. Polskie znaki są.
+- **Następne kroki (uzgodnione):** `Logger` z poziomami i buforem
+  cyklicznym (patrz punkt 0, "Logowanie"), potem konsola na ekranie w
+  stylu Quake (klawisz `~`, przewijanie PageUp/PageDown, kolory wg
+  poziomu, na razie bez wpisywania poleceń) - zbudowana na `TextBatch`.
 
 ## Rekomendowana kolejność najbliższych kroków
 
@@ -230,3 +246,4 @@ materiałami, ale bez światła i bez wejścia), naturalne następne kroki to:
 
 Daj znać, od którego punktu zaczynamy - każdy nadaje się na osobną sesję
 nauki z książką obok klawiatury.
+

@@ -40,6 +40,13 @@ public final class DescriptorSetLayout {
                 new int[] {VK_SHADER_STAGE_FRAGMENT_BIT, VK_SHADER_STAGE_FRAGMENT_BIT, VK_SHADER_STAGE_FRAGMENT_BIT});
     }
 
+    /** Pojedyncza tekstura w shaderze fragmentów (binding = 0) - np. atlas czcionki nakładki. */
+    public static DescriptorSetLayout singleTexture(VulkanContext ctx) {
+        return new DescriptorSetLayout(ctx,
+                new int[] {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER},
+                new int[] {VK_SHADER_STAGE_FRAGMENT_BIT});
+    }
+
     private DescriptorSetLayout(VulkanContext ctx, int[] types, int[] stages) {
         this.ctx = ctx;
 

@@ -19,6 +19,7 @@ public record EngineConfig(
         Camera camera,
         Controls controls,
         Lighting lighting,
+        Ui ui,
         Shaders shaders,
         Scene scene) {
 
@@ -29,6 +30,7 @@ public record EngineConfig(
         require(camera != null, "brak sekcji camera");
         require(controls != null, "brak sekcji controls");
         require(lighting != null, "brak sekcji lighting");
+        require(ui != null, "brak sekcji ui");
         require(shaders != null, "brak sekcji shaders");
         require(scene != null, "brak sekcji scene");
     }
@@ -131,6 +133,20 @@ public record EngineConfig(
             requireColor(skyColor, "lighting.skyColor");
             requireColor(groundColor, "lighting.groundColor");
             require(sunIntensity >= 0, "lighting.sunIntensity nie może być ujemne");
+        }
+    }
+
+    /**
+     * Nakładka 2D (engine.ui).
+     *
+     * @param font     plik czcionki .ttf (classpath albo dysk)
+     * @param fontSize wysokość czcionki w pikselach
+     */
+    public record Ui(String font, float fontSize) {
+        public Ui {
+            requirePath(font, "ui.font");
+            // Górna granica: przy większym rozmiarze znaki nie mieszczą się w atlasie 1024x1024 (BakedFont).
+            require(fontSize >= 6 && fontSize <= 48, "ui.fontSize musi być w zakresie 6..48");
         }
     }
 

@@ -8,10 +8,10 @@ zamiast jednego 2000-liniowego pliku, kod jest podzielony na klasy
 odpowiadające konkretnym obiektom/koncepcjom Vulkana, żeby łatwiej się było
 tego uczyć.
 
-Po uruchomieniu zobaczysz obracający się, oteksturowany model domku (ten sam
+Po uruchomieniu zobaczysz oświetlony, oteksturowany model domku (ten sam
 `chalet.obj`, którego używa oryginalny tutorial) oraz licznik FPS w prawym
-górnym rogu, narysowany jako prosty wyświetlacz 7-segmentowy (bez żadnego
-fontu - same proceduralne prostokąty).
+górnym rogu, narysowany prawdziwą czcionką (DejaVu Sans Mono wypalona do
+tekstury przez `stb_truetype`).
 
 ## Uruchomienie
 
@@ -107,8 +107,8 @@ src/main/java/engine/
     RenderPass.java            opis załączników koloru/głębi i podpasów
     DescriptorSetLayout.java   "kształt" danych widocznych dla shaderów (UBO + sampler)
     GraphicsPipeline.java      shadery + cały zamrożony stan rysowania (model 3D)
-    OverlayPipeline.java       drugi, prostszy pipeline dla nakładki 2D (bez descriptor setów, bez testu głębi)
-    OverlayMesh.java           bufor wierzchołków nakładki o stałym rozmiarze, aktualizowany co klatkę
+    OverlayPipeline.java       drugi, prostszy pipeline dla nakładki 2D (atlas czcionki, mieszanie alfa, bez testu głębi)
+    OverlayMesh.java           bufory wierzchołków nakładki (po jednym na obraz swapchaina), aktualizowane co klatkę
     DepthResources.java        bufor głębi (z-bufor)
     Framebuffers.java          framebuffer na każdy obraz swapchaina
     CommandPool.java           pula command bufferów + pomocnicze "one-shot" polecenia
@@ -133,13 +133,17 @@ src/main/java/engine/
     ModelLoader.java             wczytywanie modeli z pamięci (Assimp) - .obj/.fbx/.glb/...; generuje normalne
     Camera.java                  kamera swobodna (pozycja + kierunek, obrót/ruch/zoom) + projekcja
     FlyCameraController.java     sterowanie kamerą z klawiatury i myszy (WASD + PPM)
-    OverlayVertex.java           layout wierzchołka nakładki 2D (pozycja NDC + kolor)
     FpsCounter.java               liczy FPS uśredniając w oknach czasowych
-    SevenSegmentDigits.java       generuje geometrię licznika FPS (wyświetlacz 7-segmentowy)
+  ui/
+    BakedFont.java               czcionka TTF wypalona do bitmapy (stb_truetype) + położenie każdego znaku
+    FontAtlas.java               ta bitmapa jako tekstura na GPU + descriptor set dla shadera
+    TextBatch.java               składa napisy i prostokąty (tła) w wierzchołki nakładki na jedną klatkę
+    OverlayVertex.java           layout wierzchołka nakładki 2D (pozycja NDC, UV w atlasie, kolor RGBA)
 
 src/main/resources/
   shaders/model.vert, model.frag       shadery GLSL modelu 3D (oświetlenie: Lambert + Blinn-Phong + ambient półsferyczny)
-  shaders/overlay.vert, overlay.frag   shadery GLSL nakładki 2D (licznik FPS)
+  shaders/overlay.vert, overlay.frag   shadery GLSL nakładki 2D (tekst z atlasu czcionki, tła paneli)
+  fonts/DejaVuSansMono.ttf              czcionka nakładki (licencja: fonts/DejaVu-LICENSE.txt)
   textures/chalet.jpg                   tekstura domku
   config/engine-defaults.json           domyślna konfiguracja silnika
   models/chalet.obj                     geometria domku

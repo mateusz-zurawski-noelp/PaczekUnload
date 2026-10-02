@@ -47,6 +47,19 @@ public final class Texture {
         return new Texture(ctx, commandPool, decode(encoded, name));
     }
 
+    /**
+     * Tekstura z gotowych pikseli RGBA8 (4 bajty na piksel, wiersz po wierszu)
+     * wygenerowanych w programie - np. atlas czcionki (patrz engine.ui.FontAtlas).
+     *
+     * @param rgba piksele; nie są zwalniane (należą do wywołującego)
+     */
+    public static Texture fromRgba(VulkanContext ctx, CommandPool commandPool, ByteBuffer rgba, int width, int height) {
+        if (rgba.remaining() < width * height * 4) {
+            throw new IllegalArgumentException("Za mało danych dla tekstury " + width + "x" + height + " RGBA");
+        }
+        return new Texture(ctx, commandPool, new Pixels(rgba, width, height, () -> { }));
+    }
+
     /** Jednokolorowa tekstura 1x1 - neutralny zamiennik, gdy materiał nie ma danej tekstury (biała = brak wpływu). */
     public static Texture solidColor(VulkanContext ctx, CommandPool commandPool, int r, int g, int b, int a) {
         ByteBuffer data = MemoryUtil.memAlloc(4);

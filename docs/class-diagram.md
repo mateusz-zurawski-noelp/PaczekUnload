@@ -110,6 +110,9 @@ classDiagram
         -FlyCameraController cameraController
         -SyncObjects sync
         -FpsCounter fpsCounter
+        -DescriptorSetLayout overlayLayout
+        -FontAtlas font
+        -TextBatch overlay
         -OverlayMesh overlayMesh
         -SwapChain swapChain
         -RenderPass renderPass
@@ -279,13 +282,39 @@ classDiagram
         +bindingDescription(stack)$
         +attributeDescriptions(stack)$
     }
+    %% ---------- ui ----------
     class OverlayVertex {
+        +FLOATS$ int
+        +SIZEOF$ int
         +bindingDescription(stack)$
         +attributeDescriptions(stack)$
     }
-    class SevenSegmentDigits {
-        +VERTEX_COUNT$ int
-        +buildFps(fps, w, h)$ List~OverlayVertex~
+    class BakedFont {
+        +bake(ByteBuffer, name, pixelHeight)$ BakedFont
+        +glyph(int codepoint) Glyph
+        +ascent() float
+        +lineHeight() float
+        +whiteU() float
+        +whiteV() float
+        +coverage() byte[]
+    }
+    class Glyph["BakedFont.Glyph"] {
+        <<record>>
+        +float x0, y0, x1, y1
+        +float u0, v0, u1, v1
+        +float advance
+    }
+    class FontAtlas {
+        +FontAtlas(ctx, pool, layout, BakedFont)
+        +descriptorSet() long
+    }
+    class TextBatch {
+        +begin(width, height)
+        +rect(x0, y0, x1, y1, Vector4fc)
+        +text(String, x, y, Vector4fc) float
+        +measure(String) float
+        +lineHeight() float
+        +vertexCount() int
     }
     class UniformBufferObject {
         +SIZEOF$ int
@@ -338,6 +367,7 @@ classDiagram
     }
     class OverlayPipeline {
         +handle() long
+        +layout() long
     }
     class ShaderCompiler {
         +compileFromResource(path, kind)$ SPIRV
@@ -367,6 +397,7 @@ classDiagram
     class DescriptorSetLayout {
         +perFrame(ctx)$ DescriptorSetLayout
         +perMaterial(ctx)$ DescriptorSetLayout
+        +singleTexture(ctx)$ DescriptorSetLayout
         +handle() long
     }
     class DescriptorSets {
@@ -379,13 +410,15 @@ classDiagram
     class Texture {
         +fromEncodedImage(ctx, pool, bytes, name)$ Texture
         +solidColor(ctx, pool, r, g, b, a)$ Texture
+        +fromRgba(ctx, pool, ByteBuffer, w, h)$ Texture
         +imageView() long
         +sampler() long
     }
     class OverlayMesh {
         +capacity() int
-        +update(List~OverlayVertex~)
-        +bind(VkCommandBuffer)
+        +update(int imageIndex, TextBatch)
+        +vertexCount(int imageIndex) int
+        +bind(VkCommandBuffer, int imageIndex)
     }
     class SyncObjects {
         +currentFrame() Frame
@@ -465,7 +498,16 @@ classDiagram
     Engine --> SceneLighting
     Engine ..> LightingConfig : createLighting()
     UniformBufferObject --> SceneLighting
-    Engine ..> SevenSegmentDigits
+    Engine --> FontAtlas
+    Engine --> TextBatch
+    Engine ..> BakedFont : bakeFont()
+    BakedFont *-- Glyph
+    FontAtlas ..> BakedFont
+    FontAtlas ..> Texture
+    TextBatch --> BakedFont
+    TextBatch ..> OverlayVertex
+    OverlayMesh ..> TextBatch
+    OverlayPipeline ..> DescriptorSetLayout
     Engine ..> VulkanImages : findDepthFormat()
 
     %% zasoby
@@ -533,7 +575,6 @@ classDiagram
     Mesh ..> CommandPool
     OverlayMesh ..> OverlayVertex
     OverlayMesh ..> VulkanBuffers
-    SevenSegmentDigits ..> OverlayVertex
 
     %% obiekty sceny i materiały
     Renderable "1" *-- "n" Part

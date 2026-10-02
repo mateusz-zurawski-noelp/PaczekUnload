@@ -16,6 +16,7 @@ import java.nio.LongBuffer;
 
 import static org.lwjgl.assimp.Assimp.aiProcess_FlipUVs;
 import static org.lwjgl.assimp.Assimp.aiProcess_GenSmoothNormals;
+import static org.lwjgl.assimp.Assimp.aiProcess_JoinIdenticalVertices;
 import static org.lwjgl.system.MemoryStack.stackPush;
 import static org.lwjgl.vulkan.VK10.*;
 
@@ -68,9 +69,19 @@ public final class Mesh {
         // GenSmoothNormals: jeśli plik nie ma normalnych (chalet.obj nie ma), Assimp
         // wylicza je, uśredniając normalne ścian stykających się w wierzchołku -
         // dzięki temu oświetlenie jest gładkie, a nie "kanciaste" na każdym trójkącie.
+        //
+        // JoinIdenticalVertices: OBJ i FBX dają osobny wierzchołek dla każdego rogu
+        // każdego trójkąta, choć ten sam punkt należy zwykle do kilku trójkątów.
+        // Assimp scala wierzchołki o identycznych WSZYSTKICH atrybutach (pozycja,
+        // UV, normalna...) i odwołuje się do nich przez indeksy. Dla chalet.obj:
+        // 1 500 000 -> ~266 000 wierzchołków (66 MB -> 12 MB), a GPU lepiej
+        // wykorzystuje cache wierzchołków. Na szwach UV wierzchołki zostają osobno,
+        // bo różnią się współrzędnymi tekstury. Kolejność flag nie ma znaczenia -
+        // Assimp sam ustala kolejność kroków (normalne liczy przed scalaniem).
         ModelLoader.Model model;
         try {
-            model = ModelLoader.load(fileData, modelPath, aiProcess_FlipUVs | aiProcess_GenSmoothNormals);
+            model = ModelLoader.load(fileData, modelPath,
+                    aiProcess_FlipUVs | aiProcess_GenSmoothNormals | aiProcess_JoinIdenticalVertices);
         } finally {
             MemoryUtil.memFree(fileData);
         }

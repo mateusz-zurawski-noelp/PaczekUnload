@@ -36,11 +36,12 @@ public final class CommandBuffers {
     private final DescriptorSets descriptorSets;
     private final OverlayPipeline overlayPipeline;
     private final OverlayMesh overlayMesh;
+    private final long overlayDescriptorSet;
     private final List<VkCommandBuffer> buffers;
 
     public CommandBuffers(VulkanContext ctx, CommandPool commandPool, Framebuffers framebuffers, RenderPass renderPass,
                             VkExtent2D extent, GraphicsPipeline pipeline, DescriptorSets descriptorSets,
-                            OverlayPipeline overlayPipeline, OverlayMesh overlayMesh) {
+                            OverlayPipeline overlayPipeline, OverlayMesh overlayMesh, long overlayDescriptorSet) {
         this.ctx = ctx;
         this.commandPool = commandPool;
         this.framebuffers = framebuffers;
@@ -50,6 +51,7 @@ public final class CommandBuffers {
         this.descriptorSets = descriptorSets;
         this.overlayPipeline = overlayPipeline;
         this.overlayMesh = overlayMesh;
+        this.overlayDescriptorSet = overlayDescriptorSet;
 
         int count = framebuffers.handles().size();
         buffers = new ArrayList<>(count);
@@ -135,12 +137,16 @@ public final class CommandBuffers {
                     }
                 }
 
-                // Nakładka (licznik FPS) rysowana na wierzchu, w tym samym render passie.
-                // Liczba wierzchołków jest stała (patrz OverlayMesh) - tylko zawartość
-                // bufora zmienia się co klatkę.
-                vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, overlayPipeline.handle());
-                overlayMesh.bind(commandBuffer);
-                vkCmdDraw(commandBuffer, overlayMesh.capacity(), 1, 0, 0);
+                // Nakładka 2D (tekst, tła paneli) rysowana na wierzchu, w tym samym
+                // render passie - jednym poleceniem, z bufora tego obrazu swapchaina.
+                int overlayVertices = overlayMesh.vertexCount(index);
+                if (overlayVertices > 0) {
+                    vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, overlayPipeline.handle());
+                    vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
+                            overlayPipeline.layout(), 0, stack.longs(overlayDescriptorSet), null);
+                    overlayMesh.bind(commandBuffer, index);
+                    vkCmdDraw(commandBuffer, overlayVertices, 1, 0, 0);
+                }
             }
             vkCmdEndRenderPass(commandBuffer);
 

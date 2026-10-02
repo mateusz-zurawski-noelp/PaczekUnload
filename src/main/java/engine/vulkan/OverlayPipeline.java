@@ -1,6 +1,6 @@
 package engine.vulkan;
 
-import engine.scene.OverlayVertex;
+import engine.ui.OverlayVertex;
 import engine.vulkan.shader.ShaderCompiler;
 import org.lwjgl.system.MemoryStack;
 import org.lwjgl.vulkan.*;
@@ -14,13 +14,16 @@ import static org.lwjgl.system.MemoryStack.stackPush;
 import static org.lwjgl.vulkan.VK10.*;
 
 /**
- * Drugi, dużo prostszy pipeline, używany do rysowania płaskiej nakładki 2D
- * (licznik FPS) na wierzchu sceny 3D, w tym samym render passie/subpassie.
- * Różni się od {@link GraphicsPipeline} tym, że: nie ma żadnych descriptor
- * setów (nie potrzebuje UBO ani tekstury - kolor wierzchołka wystarczy),
- * ma wyłączony test głębi (ma być zawsze na wierzchu) i wyłączone
- * odrzucanie tylnych ścian (culling) - to zwykłe, płaskie prostokąty
- * generowane proceduralnie, bez dbania o kolejność wierzchołków.
+ * Drugi, prostszy pipeline, używany do rysowania płaskiej nakładki 2D
+ * (tekst, tła paneli) na wierzchu sceny 3D, w tym samym render passie/subpassie.
+ * Różni się od {@link GraphicsPipeline} tym, że:
+ *  - ma jeden descriptor set (set = 0): atlas czcionki, bez UBO,
+ *  - ma wyłączony test głębi (nakładka ma być zawsze na wierzchu),
+ *  - ma wyłączone odrzucanie tylnych ścian (culling) - to zwykłe, płaskie
+ *    prostokąty, bez dbania o kolejność wierzchołków,
+ *  - ma włączone mieszanie alfa (alpha blending): krawędzie liter są
+ *    półprzezroczyste (antyaliasing z atlasu), a tła paneli mogą
+ *    prześwitywać. Kolor wynikowy = nowy * alfa + stary * (1 - alfa).
  */
 public final class OverlayPipeline {
 
@@ -28,7 +31,7 @@ public final class OverlayPipeline {
     private final long pipelineLayout;
     private final long handle;
 
-    public OverlayPipeline(VulkanContext ctx, RenderPass renderPass, VkExtent2D extent,
+    public OverlayPipeline(VulkanContext ctx, RenderPass renderPass, DescriptorSetLayout textureLayout, VkExtent2D extent,
                              String vertexShaderResource, String fragmentShaderResource) {
         this.ctx = ctx;
 
@@ -108,7 +111,13 @@ public final class OverlayPipeline {
                     VkPipelineColorBlendAttachmentState.calloc(1, stack);
             colorBlendAttachment.colorWriteMask(VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT
                     | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT);
-            colorBlendAttachment.blendEnable(false);
+            colorBlendAttachment.blendEnable(true);
+            colorBlendAttachment.srcColorBlendFactor(VK_BLEND_FACTOR_SRC_ALPHA);
+            colorBlendAttachment.dstColorBlendFactor(VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA);
+            colorBlendAttachment.colorBlendOp(VK_BLEND_OP_ADD);
+            colorBlendAttachment.srcAlphaBlendFactor(VK_BLEND_FACTOR_ONE);
+            colorBlendAttachment.dstAlphaBlendFactor(VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA);
+            colorBlendAttachment.alphaBlendOp(VK_BLEND_OP_ADD);
 
             VkPipelineColorBlendStateCreateInfo colorBlending = VkPipelineColorBlendStateCreateInfo.calloc(stack);
             colorBlending.sType(VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO);
@@ -117,9 +126,10 @@ public final class OverlayPipeline {
             colorBlending.pAttachments(colorBlendAttachment);
             colorBlending.blendConstants(stack.floats(0.0f, 0.0f, 0.0f, 0.0f));
 
-            // Brak descriptor setów - nakładka nie czyta żadnych uniformów ani tekstur.
+            // Set 0 = atlas czcionki (patrz engine.ui.FontAtlas).
             VkPipelineLayoutCreateInfo pipelineLayoutInfo = VkPipelineLayoutCreateInfo.calloc(stack);
             pipelineLayoutInfo.sType(VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO);
+            pipelineLayoutInfo.pSetLayouts(stack.longs(textureLayout.handle()));
 
             LongBuffer pPipelineLayout = stack.longs(VK_NULL_HANDLE);
             if (vkCreatePipelineLayout(ctx.device(), pipelineLayoutInfo, null, pPipelineLayout) != VK_SUCCESS) {
@@ -172,6 +182,10 @@ public final class OverlayPipeline {
 
     public long handle() {
         return handle;
+    }
+
+    public long layout() {
+        return pipelineLayout;
     }
 
     public void destroy() {

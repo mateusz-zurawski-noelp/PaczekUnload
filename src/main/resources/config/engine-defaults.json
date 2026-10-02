@@ -36,6 +36,10 @@
     "groundColor": [0.10, 0.09, 0.08],
     "sunOrbitDegreesPerSecond": 0.0
   },
+  "ui": {
+    "font": "fonts/DejaVuSansMono.ttf",
+    "fontSize": 18.0
+  },
   "shaders": {
     "modelVertex": "shaders/model.vert",
     "modelFragment": "shaders/model.frag",
